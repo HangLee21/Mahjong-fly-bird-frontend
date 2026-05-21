@@ -1,0 +1,4 @@
+<view wx:if="{{visible}}" class="loading-mask">
+  <view class="spinner"></view>
+  <text>{{text}}</text>
+</view>

@@ -1,0 +1,6 @@
+.discard {
+  min-height: 76rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6rpx;
+}

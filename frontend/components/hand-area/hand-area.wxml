@@ -1,0 +1,10 @@
+<view class="hand">
+  <tile-card
+    wx:for="{{displayTiles}}"
+    wx:key="id"
+    tile="{{item.id}}"
+    selected="{{item.selected}}"
+    disabled="{{disabled || !item.legal}}"
+    bind:tapTile="onTapTile"
+  />
+</view>

@@ -1,0 +1,29 @@
+.login {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 36rpx;
+  background: linear-gradient(180deg, #12372a 0%, #f4f0e6 58%);
+}
+
+.brand {
+  color: #fffdf6;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.subtitle {
+  color: #efe3c7;
+}
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  margin-bottom: 14rpx;
+  display: block;
+}
+
+.login-btn {
+  margin-top: 28rpx;
+}

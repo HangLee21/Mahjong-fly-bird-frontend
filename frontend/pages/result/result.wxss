@@ -1,0 +1,14 @@
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.buttons {
+  display: flex;
+  gap: 16rpx;
+}
+
+.buttons button {
+  flex: 1;
+}

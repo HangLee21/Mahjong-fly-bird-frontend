@@ -1,0 +1,9 @@
+<view class="page result">
+  <view wx:if="{{view && view.result}}" class="panel">
+    <score-panel result="{{view.result}}" />
+  </view>
+  <view class="buttons">
+    <button bindtap="onBackRoom">返回房间</button>
+    <button class="primary-btn" bindtap="onReplay">查看回放</button>
+  </view>
+</view>

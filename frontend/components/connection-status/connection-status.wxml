@@ -1,0 +1,4 @@
+<view class="status {{status}}">
+  <text class="dot"></text>
+  <text>{{label}}</text>
+</view>

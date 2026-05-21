@@ -1,0 +1,8 @@
+.hand {
+  min-height: 118rpx;
+  display: flex;
+  align-items: flex-end;
+  gap: 8rpx;
+  overflow-x: auto;
+  padding: 24rpx 8rpx 8rpx;
+}

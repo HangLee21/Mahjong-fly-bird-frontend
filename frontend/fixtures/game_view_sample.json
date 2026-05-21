@@ -1,0 +1,23 @@
+{
+  "roomId": "886688",
+  "gameId": "game_mock_001",
+  "playerIndex": 0,
+  "status": "PLAYING",
+  "stepIndex": 18,
+  "dealer": 0,
+  "currentPlayer": 0,
+  "scores": [0, 0, 0, 0],
+  "wallTilesRemaining": 72,
+  "publicKongTiles": [13, 31],
+  "xiaoJiActiveAsWild": true,
+  "self": {
+    "hand": [0, 1, 2, 4, 4, 7, 9, 12, 18, 18, 24, 27, 31, 31],
+    "melds": [],
+    "discards": [3, 8, 28]
+  },
+  "opponents": [],
+  "legalActions": [
+    { "type": "DISCARD", "tile": 18, "actionId": 103 },
+    { "type": "PASS", "actionId": 1 }
+  ]
+}

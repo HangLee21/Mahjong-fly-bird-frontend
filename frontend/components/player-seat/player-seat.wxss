@@ -1,0 +1,50 @@
+.seat {
+  padding: 12rpx;
+  border-radius: 8rpx;
+  border: 1rpx solid rgba(249, 237, 208, 0.28);
+  background: rgba(255, 250, 240, 0.9);
+  box-shadow: 0 10rpx 18rpx rgba(14, 31, 24, 0.18);
+}
+
+.active {
+  border-color: #d9a441;
+  box-shadow: 0 0 0 3rpx rgba(217, 164, 65, 0.16);
+}
+
+.seat-head {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-bottom: 8rpx;
+}
+
+.name {
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.tag {
+  padding: 2rpx 8rpx;
+  border-radius: 6rpx;
+  background: #dfeee7;
+  color: #176b4d;
+  font-size: 18rpx;
+}
+
+.dealer {
+  background: #f7e1a6;
+  color: #725018;
+}
+
+.count {
+  margin-left: auto;
+  color: #68736b;
+  font-size: 20rpx;
+}
+
+.backs {
+  display: flex;
+  gap: 4rpx;
+  margin-bottom: 8rpx;
+  overflow: hidden;
+}

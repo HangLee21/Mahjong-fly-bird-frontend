@@ -1,0 +1,19 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/home/home",
+    "pages/room/room",
+    "pages/game/game",
+    "pages/result/result",
+    "pages/replay-list/replay-list",
+    "pages/replay/replay"
+  ],
+  "window": {
+    "navigationBarTitleText": "曲靖飞小鸡",
+    "navigationBarBackgroundColor": "#12372a",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f4f0e6"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

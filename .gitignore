@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+miniprogram_npm/
+frontend/miniprogram_npm/
+
+# Build and tool caches
+dist/
+build/
+coverage/
+.cache/
+.temp/
+.tmp/
+tmp/
+temp/
+.eslintcache
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# WeChat DevTools local/private files
+/project.config.json
+project.private.config.json
+frontend/project.private.config.json
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Temporary imported repositories/assets
+mahjim-tmp/
+
+# Archives and generated bundles
+*.zip
+*.rar
+*.7z

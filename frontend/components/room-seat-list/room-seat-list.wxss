@@ -1,0 +1,38 @@
+.seats {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.seat {
+  min-height: 96rpx;
+  padding: 16rpx;
+  border: 1rpx solid #ded4c1;
+  border-radius: 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fffdf6;
+}
+
+.name {
+  font-weight: 700;
+  margin-right: 8rpx;
+}
+
+.tag {
+  padding: 3rpx 8rpx;
+  border-radius: 6rpx;
+  margin-left: 6rpx;
+  background: #dfeee7;
+  color: #176b4d;
+  font-size: 20rpx;
+}
+
+.ready {
+  color: #176b4d;
+}
+
+.waiting {
+  color: #9a6b1e;
+}

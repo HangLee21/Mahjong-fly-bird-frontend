@@ -1,0 +1,21 @@
+.actions {
+  display: flex;
+  gap: 12rpx;
+  overflow-x: auto;
+  padding: 12rpx 0;
+}
+
+.action {
+  min-width: 112rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  padding: 0 16rpx;
+  border-radius: 8rpx;
+  background: #176b4d;
+  color: #fff;
+  font-size: 24rpx;
+}
+
+.win {
+  background: #b93f36;
+}

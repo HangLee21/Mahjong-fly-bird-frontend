@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "回放",
+  "usingComponents": {
+    "game-board": "../../components/game-board/game-board"
+  }
+}

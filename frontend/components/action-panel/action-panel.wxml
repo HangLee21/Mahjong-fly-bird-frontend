@@ -1,0 +1,13 @@
+<view class="actions">
+  <button
+    wx:for="{{displayActions}}"
+    wx:key="actionId"
+    data-index="{{item.index}}"
+    class="action {{item.type === 'WIN' ? 'win' : ''}}"
+    loading="{{submitting}}"
+    disabled="{{submitting}}"
+    bindtap="onAction"
+  >
+    {{item.label}}
+  </button>
+</view>

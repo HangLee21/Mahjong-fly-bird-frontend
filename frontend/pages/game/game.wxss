@@ -1,0 +1,20 @@
+.game {
+  padding: 18rpx;
+  background: #efe6d3;
+}
+
+.game-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14rpx;
+}
+
+.notes {
+  margin-top: 18rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  color: #68736b;
+  font-size: 22rpx;
+}

@@ -1,0 +1,18 @@
+<view class="page game">
+  <view class="game-head">
+    <text class="screen-title">牌桌</text>
+    <connection-status status="{{wsStatus}}" />
+  </view>
+  <game-board
+    view="{{view}}"
+    legalDiscardTiles="{{legalDiscardTiles}}"
+    selectedTile="{{selectedTile}}"
+    submitting="{{submitting}}"
+    bind:selectTile="onSelectTile"
+    bind:submitAction="onSubmitAction"
+  />
+  <view wx:if="{{view && view.restrictions && view.restrictions.length}}" class="panel notes">
+    <text wx:for="{{view.restrictions}}" wx:key="*this">{{item}}</text>
+  </view>
+  <loading-mask visible="{{loading}}" text="同步后端视图" />
+</view>

@@ -1,0 +1,11 @@
+<view class="page login">
+  <view class="brand">
+    <text class="screen-title">曲靖飞小鸡</text>
+    <text class="subtitle">按曲靖飞小鸡规则 v1.5 预留协议</text>
+  </view>
+  <view class="panel">
+    <text class="section-title">微信登录</text>
+    <text class="muted">前端只保存 token 与基础用户信息，牌局裁决全部以后端 PlayerGameView 为准。</text>
+    <button class="primary-btn login-btn" loading="{{loading}}" bindtap="onLogin">进入游戏</button>
+  </view>
+</view>
