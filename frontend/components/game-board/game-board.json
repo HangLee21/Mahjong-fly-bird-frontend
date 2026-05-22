@@ -1,11 +1,6 @@
 {
   "component": true,
   "usingComponents": {
-    "tile-card": "../tile-card/tile-card",
-    "hand-area": "../hand-area/hand-area",
-    "meld-area": "../meld-area/meld-area",
-    "discard-area": "../discard-area/discard-area",
-    "player-seat": "../player-seat/player-seat",
     "action-panel": "../action-panel/action-panel"
   }
 }

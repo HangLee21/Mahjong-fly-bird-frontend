@@ -1,59 +1,18 @@
-﻿<view wx:if="{{view}}" class="board">
-  <view class="topbar">
-    <text>第 {{view.stepIndex}} 手</text>
-    <text>余牌 {{view.wallTilesRemaining}}</text>
-    <text>{{view.xiaoJiActiveAsWild ? '小鸡万能' : '小鸡仅作1条'}}</text>
-  </view>
+<view wx:if="{{view}}" class="board">
+  <canvas
+    canvas-id="gameTableCanvas"
+    class="table-canvas"
+    style="width: {{canvasWidth}}px; height: {{canvasHeight}}px;"
+    disable-scroll="true"
+    bindtap="onCanvasTap"
+  ></canvas>
 
-  <view class="table-scene">
-    <player-seat
-      wx:for="{{tableOpponents}}"
-      wx:key="seatIndex"
-      class="opponent-seat seat-{{item.tablePosition}}"
-      player="{{item}}"
-      active="{{view.currentPlayer === item.seatIndex}}"
-      dealer="{{view.dealer === item.seatIndex}}"
+  <view class="action-dock">
+    <action-panel
+      actions="{{view.legalActions}}"
+      submitting="{{submitting}}"
+      selectedTile="{{selectedTile}}"
+      bind:submitAction="onSubmitAction"
     />
-
-    <view class="table-surface">
-      <view class="table-ring"></view>
-      <view class="center-info">
-        <view class="round-state">
-          <text class="turn-label">当前座位</text>
-          <text class="turn-value">{{view.currentPlayer}}</text>
-        </view>
-        <view class="kong-row">
-          <text class="label">公开杠牌</text>
-          <view class="kong-tiles">
-            <tile-card wx:for="{{view.publicKongTiles}}" wx:key="*this" tile="{{item}}" small />
-          </view>
-        </view>
-        <view class="wall-info">
-          <text>庄 {{view.dealer}}</text>
-          <text>牌山 {{view.wallTilesRemaining}}</text>
-        </view>
-      </view>
-      <view class="self-discards">
-        <discard-area tiles="{{view.self.discards}}" latestTile="{{view.lastDiscard && view.lastDiscard.fromPlayer === view.playerIndex ? view.lastDiscard.tile : -1}}" />
-      </view>
-    </view>
-  </view>
-
-  <view class="self-area">
-    <view class="self panel">
-      <view class="self-head">
-        <text>我的手牌</text>
-        <text>座位 {{view.playerIndex}} / 分数 {{view.scores[view.playerIndex]}}</text>
-      </view>
-      <meld-area melds="{{view.self.melds}}" />
-      <hand-area
-        tiles="{{view.self.hand}}"
-        legalTiles="{{legalDiscardTiles}}"
-        selectedTile="{{selectedTile}}"
-        disabled="{{submitting}}"
-        bind:selectTile="onSelectTile"
-      />
-      <action-panel actions="{{view.legalActions}}" submitting="{{submitting}}" selectedTile="{{selectedTile}}" bind:submitAction="onSubmitAction" />
-    </view>
   </view>
 </view>

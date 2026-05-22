@@ -1,5 +1,6 @@
 {
   "navigationBarTitleText": "牌桌",
+  "pageOrientation": "landscape",
   "usingComponents": {
     "connection-status": "../../components/connection-status/connection-status",
     "game-board": "../../components/game-board/game-board",

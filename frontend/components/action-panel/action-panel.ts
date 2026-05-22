@@ -1,4 +1,5 @@
 import { ACTION_LABELS } from '../../config/constants';
+import { getTileLabel } from '../../utils/tile-utils';
 
 Component({
   properties: {
@@ -12,11 +13,14 @@ Component({
   observers: {
     actions(actions: Array<{ type: string; tile?: number; actionId: number }>) {
       this.setData({
-        displayActions: (actions || []).map((action, index) => ({
-          ...action,
-          index,
-          label: `${ACTION_LABELS[action.type] || action.type}${action.tile !== undefined ? ` ${action.tile}` : ''}`,
-        })),
+        displayActions: (actions || [])
+          .map((action, index) => ({ action, index }))
+          .filter(({ action }) => action.type !== 'DISCARD')
+          .map(({ action, index }) => ({
+            ...action,
+            index,
+            label: `${ACTION_LABELS[action.type] || action.type}${action.tile !== undefined ? ` ${getTileLabel(action.tile)}` : ''}`,
+          })),
       });
     },
   },

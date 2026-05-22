@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const constants_1 = require("../../config/constants");
+const tile_utils_1 = require("../../utils/tile-utils");
 Component({
     properties: {
         actions: { type: Array, value: [] },
@@ -13,10 +14,13 @@ Component({
     observers: {
         actions(actions) {
             this.setData({
-                displayActions: (actions || []).map((action, index) => ({
+                displayActions: (actions || [])
+                    .map((action, index) => ({ action, index }))
+                    .filter(({ action }) => action.type !== 'DISCARD')
+                    .map(({ action, index }) => ({
                     ...action,
                     index,
-                    label: `${constants_1.ACTION_LABELS[action.type] || action.type}${action.tile !== undefined ? ` ${action.tile}` : ''}`,
+                    label: `${constants_1.ACTION_LABELS[action.type] || action.type}${action.tile !== undefined ? ` ${(0, tile_utils_1.getTileLabel)(action.tile)}` : ''}`,
                 })),
             });
         },

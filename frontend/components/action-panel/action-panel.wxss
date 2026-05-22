@@ -1,21 +1,35 @@
 .actions {
   display: flex;
-  gap: 12rpx;
-  overflow-x: auto;
-  padding: 12rpx 0;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  overflow: visible;
+  padding: 0;
 }
 
 .action {
-  min-width: 112rpx;
-  height: 68rpx;
-  line-height: 68rpx;
-  padding: 0 16rpx;
-  border-radius: 8rpx;
-  background: #176b4d;
-  color: #fff;
-  font-size: 24rpx;
+  min-width: 54px;
+  width: 54px;
+  height: 54px;
+  line-height: 50px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 239, 190, 0.78);
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0) 32%),
+    linear-gradient(145deg, #28c5b4 0%, #0f8c80 56%, #075a5f 100%);
+  color: #fff8d9;
+  font-size: 22px;
+  font-weight: 800;
+  text-shadow: 0 2px 4px rgba(0, 50, 52, 0.65);
+  box-shadow:
+    0 7px 13px rgba(0, 0, 0, 0.28),
+    inset 0 -5px 9px rgba(0, 49, 53, 0.32),
+    inset 0 4px 8px rgba(255, 255, 255, 0.3);
 }
 
 .win {
-  background: #b93f36;
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 32%),
+    linear-gradient(145deg, #ffcb72 0%, #e07542 55%, #9e352b 100%);
 }

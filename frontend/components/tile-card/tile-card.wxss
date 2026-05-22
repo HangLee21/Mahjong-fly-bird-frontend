@@ -1,10 +1,10 @@
 .tile {
-  width: 62rpx;
-  height: 86rpx;
-  border-radius: 8rpx;
+  width: 36px;
+  height: 52px;
+  border-radius: 6px;
   background: #fffaf0;
-  border: 1rpx solid rgba(118, 91, 51, 0.32);
-  box-shadow: 0 7rpx 0 #b99e75, 0 10rpx 14rpx rgba(31, 35, 28, 0.18);
+  border: 1px solid rgba(118, 91, 51, 0.32);
+  box-shadow: 0 4px 0 #b99e75, 0 7px 10px rgba(31, 35, 28, 0.18);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -15,14 +15,16 @@
 }
 
 .tile.small {
-  width: 40rpx;
-  height: 56rpx;
-  box-shadow: 0 4rpx 0 #b99e75, 0 7rpx 10rpx rgba(31, 35, 28, 0.14);
+  width: 22px;
+  height: 32px;
+  border-radius: 4px;
+  box-shadow: 0 3px 0 #b99e75, 0 5px 7px rgba(31, 35, 28, 0.14);
 }
 
 .selected {
-  transform: translateY(-18rpx);
+  transform: translateY(-9px);
   border-color: #d9a441;
+  box-shadow: 0 4px 0 #b99e75, 0 0 0 3px rgba(255, 214, 103, 0.45);
 }
 
 .disabled {
@@ -39,12 +41,12 @@
 }
 
 .tile-image {
-  width: 86%;
-  height: 86%;
+  width: 88%;
+  height: 88%;
 }
 
 .tile-label {
-  font-size: 22rpx;
+  font-size: 13px;
   font-weight: 700;
   color: #17231d;
 }
@@ -54,7 +56,7 @@
 }
 
 .small .tile-label {
-  font-size: 19rpx;
+  font-size: 10px;
 }
 
 .tile-wan .tile-label,
@@ -73,16 +75,16 @@
 
 .xiaoji-mark {
   position: absolute;
-  right: 3rpx;
-  bottom: 2rpx;
-  padding: 0 4rpx;
-  border-radius: 4rpx;
+  right: 1px;
+  bottom: 1px;
+  padding: 0 2px;
+  border-radius: 3px;
   background: rgba(255, 246, 218, 0.92);
-  font-size: 13rpx;
+  font-size: 8px;
   color: #b36b16;
 }
 
 .back-mark {
-  font-size: 28rpx;
+  font-size: 16px;
   font-weight: 700;
 }

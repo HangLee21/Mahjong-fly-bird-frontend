@@ -1,9 +1,13 @@
-<view class="seat {{active ? 'active' : ''}}">
+<view class="seat {{orientation}} {{active ? 'active' : ''}}">
   <view class="seat-head">
-    <text class="name">{{player.nickname || ('座位' + player.seatIndex)}}</text>
-    <text wx:if="{{player.isAI}}" class="tag">AI</text>
-    <text wx:if="{{dealer}}" class="tag dealer">庄</text>
-    <text class="count">{{player.handCount}} 张</text>
+    <view class="seat-avatar">{{player.isAI ? 'AI' : player.seatIndex}}</view>
+    <view class="seat-meta">
+      <view class="name-row">
+        <text class="name">{{player.nickname || ('座位' + player.seatIndex)}}</text>
+        <text wx:if="{{dealer}}" class="tag dealer">庄</text>
+      </view>
+      <text class="count">{{player.handCount}} 张</text>
+    </view>
   </view>
   <view class="backs">
     <tile-card wx:for="{{player.handCount > 8 ? 8 : player.handCount}}" wx:key="*this" back small />

@@ -1,20 +1,20 @@
 .melds {
   display: flex;
   flex-wrap: wrap;
-  gap: 10rpx;
+  gap: 5px;
 }
 
 .meld {
   display: flex;
   align-items: center;
-  gap: 2rpx;
-  padding: 8rpx;
-  background: rgba(255, 255, 255, 0.7);
-  border-radius: 8rpx;
+  gap: 1px;
+  padding: 2px;
+  background: rgba(4, 30, 35, 0.28);
+  border-radius: 6px;
 }
 
 .meld-type {
-  margin-left: 6rpx;
-  font-size: 18rpx;
-  color: #68736b;
+  margin-left: 3px;
+  font-size: 10px;
+  color: rgba(249, 237, 208, 0.78);
 }
