@@ -1,8 +1,8 @@
 <view wx:if="{{view}}" class="board">
   <canvas
-    canvas-id="gameTableCanvas"
+    id="gameTableCanvas"
+    type="2d"
     class="table-canvas"
-    style="width: {{canvasWidth}}px; height: {{canvasHeight}}px;"
     disable-scroll="true"
     bindtap="onCanvasTap"
   ></canvas>

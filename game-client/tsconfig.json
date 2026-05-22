@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "baseUrl": ".",
+    "types": ["jest"],
+    "paths": {
+      "@app/*": ["assets/scripts/app/*"],
+      "@core/*": ["assets/scripts/core/*"],
+      "@network/*": ["assets/scripts/network/*"],
+      "@game/*": ["assets/scripts/game/*"],
+      "@utils/*": ["assets/scripts/utils/*"]
+    }
+  },
+  "include": ["assets/scripts/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["build", "temp", "library"]
+}

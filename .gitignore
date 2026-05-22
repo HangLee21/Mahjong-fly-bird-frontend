@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 frontend/node_modules/
+game-client/node_modules/
 miniprogram_npm/
 frontend/miniprogram_npm/
 
@@ -28,6 +29,10 @@ pnpm-debug.log*
 /project.config.json
 project.private.config.json
 frontend/project.private.config.json
+game-client/temp/
+game-client/library/
+game-client/local/
+game-client/build/
 .idea/
 .vscode/
 

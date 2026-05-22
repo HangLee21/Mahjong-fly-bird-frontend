@@ -1,0 +1,7 @@
+{
+  "engine": "cocos-creator",
+  "engineVersion": "3.x",
+  "platform": "wechatgame",
+  "name": "Qujing Mahjong Game Client",
+  "description": "曲靖飞小鸡 Cocos Creator 微信小游戏客户端骨架"
+}
