@@ -133,46 +133,45 @@ export class RoomSceneController extends BaseScene {
     const panelWidth = layout.s(50);
     const panelHeight = panelWidth / PANEL_RATIO;
 
-    // 左上角面板
+    const panelPos = layout.pos(-31, 31);
+
     createImage(
       canvas,
       'RoomInfoPanel',
       'textures/ui/room_panel',
       panelWidth,
       panelHeight,
-      layout.pos(-31, 31),
+      panelPos,
     );
 
-    // 房间号文字，跟随面板移动
     this.createText(
       canvas,
       'RoomCodeText',
       `房间号 ${room.roomId}`,
-      layout.pos(-31, 33),
-      layout.s(3.2),
+      layout.pos(-36, 33),
+      layout.s(3.0),
       new Color(255, 238, 171, 255),
     );
 
-    // 规则文字，跟随面板移动
     this.createText(
       canvas,
       'RuleText',
-      `${this.settings.roundCount}轮    三番封顶    小鸡万能    一炮多响`,
-      layout.pos(-31, 28.6),
-      layout.s(2.0),
+      `${this.settings.roundCount}轮  三番封顶  小鸡万能  一炮多响`,
+      layout.pos(-35, 28.8),
+      layout.s(1.75),
       new Color(229, 248, 211, 255),
     );
 
-    // 设置按钮放在面板右侧
+    // 设置按钮放在面板内部右侧
     const settings = createButton(
       canvas,
       'SettingsButton',
       '设置',
       () => this.showSettingsDialog(true),
-      layout.pos(-6, 33),
+      layout.pos(-11, 31),
     );
 
-    this.sizeButton(settings, layout.s(10), layout.s(5));
+    this.sizeButton(settings, layout.s(7.5), layout.s(4.2));
     this.tintButton(settings, new Color(18, 95, 67, 235));
   }
 
@@ -224,7 +223,7 @@ export class RoomSceneController extends BaseScene {
 
   private createActionButtons(canvas: Node, layout: RuntimeLayout, isOwner: boolean): void {
     if (isOwner) {
-      const addAiWidth = layout.s(31);
+      const addAiWidth = layout.s(35);
       createImageButton(
         canvas,
         'ButtonAddAi',
@@ -255,9 +254,9 @@ export class RoomSceneController extends BaseScene {
       canvas,
       'ButtonReady',
       '',
-      'textures/ui/button_start',
+      'textures/ui/badge_ready',
       () => this.toggleLocalReady(),
-      layout.pos(0, -16),
+      layout.pos(0, 0),
       readyWidth,
       readyWidth / BUTTON_START_RATIO,
     );
