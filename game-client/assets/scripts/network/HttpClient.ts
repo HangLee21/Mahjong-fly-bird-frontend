@@ -1,6 +1,7 @@
 import { AppConfig } from '../app/AppConfig';
 import type { ApiResponse } from './Protocol';
 import { Storage } from '../utils/Storage';
+import { MockHttpClient } from '../mock/MockHttpClient';
 
 export class HttpClient {
   async request<T>(path: string, method: 'GET' | 'POST' = 'GET', data?: unknown): Promise<T> {
@@ -36,4 +37,4 @@ export class HttpClient {
   }
 }
 
-export const httpClient = new HttpClient();
+export const httpClient = AppConfig.USE_MOCK_HTTP ? new MockHttpClient() : new HttpClient();

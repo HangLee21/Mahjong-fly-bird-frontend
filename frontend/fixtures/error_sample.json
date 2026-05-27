@@ -1,8 +1,0 @@
-{
-  "type": "ERROR",
-  "requestId": "req_001",
-  "payload": {
-    "code": "ILLEGAL_ACTION",
-    "message": "当前动作不合法，请刷新视图"
-  }
-}

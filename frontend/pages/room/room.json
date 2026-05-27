@@ -1,7 +1,0 @@
-{
-  "navigationBarTitleText": "房间",
-  "usingComponents": {
-    "room-seat-list": "../../components/room-seat-list/room-seat-list",
-    "connection-status": "../../components/connection-status/connection-status"
-  }
-}

@@ -2,6 +2,7 @@ import { _decorator, Component, Node, Prefab, instantiate } from 'cc';
 import { ActionLabels } from '../../app/Constants';
 import { GameEvents } from '../../app/GameEvents';
 import { eventBus } from '../../core/EventBus';
+import { createLabel } from '../../ui/RuntimeUi';
 import type { GameAction } from '../GameTypes';
 
 const { ccclass, property } = _decorator;
@@ -20,7 +21,8 @@ export class ActionPanelView extends Component {
         node.name = ActionLabels[action.type] || action.type;
         node.active = !submitting;
         node.setPosition(0, -index * 64, 0);
-        node.on('click', () => eventBus.emit(GameEvents.ACTION_SELECTED, action));
+        createLabel(node, 'Label', ActionLabels[action.type] || action.type);
+        node.on('touch-end', () => eventBus.emit(GameEvents.ACTION_SELECTED, action));
         this.node.addChild(node);
       });
   }

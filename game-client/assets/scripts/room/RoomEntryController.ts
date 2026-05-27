@@ -1,0 +1,198 @@
+import { _decorator, Color, Node, Rect, resources, Sprite, SpriteFrame, Texture2D, UITransform, Vec3 } from 'cc';
+import { loadScene } from '../app/SceneNavigator';
+import { BaseScene } from '../core/BaseScene';
+import {
+  createImage,
+  createImageButton,
+  createLayout,
+  createPanel,
+  ensureCanvas,
+  ensureChild,
+  ensureComponent,
+} from '../ui/RuntimeUi';
+import { roomManager } from './RoomManager';
+
+const { ccclass } = _decorator;
+
+const ROOM_ENTRY_BG_RATIO = 1672 / 941;
+const ROOM_ENTRY_TITLE_RATIO = 874 / 323;
+const ROOM_CODE_PANEL_RATIO = 2172 / 724;
+const ROOM_ENTRY_BUTTON_RATIO = 2345 / 670;
+
+const ROOM_CODE_DIGIT_RECTS = [
+  { x: 70, yFromTop: 270, width: 147, height: 216 },
+  { x: 215, yFromTop: 270, width: 214, height: 213 },
+  { x: 490, yFromTop: 270, width: 137, height: 214 },
+  { x: 605, yFromTop: 270, width: 224, height: 216 },
+  { x: 805, yFromTop: 270, width: 223, height: 211 },
+  { x: 1005, yFromTop: 270, width: 223, height: 215 },
+  { x: 1205, yFromTop: 270, width: 224, height: 217 },
+  { x: 1405, yFromTop: 270, width: 223, height: 216 },
+  { x: 1595, yFromTop: 270, width: 210, height: 216 },
+  { x: 1825, yFromTop: 270, width: 156, height: 215 },
+];
+
+@ccclass('RoomEntryController')
+export class RoomEntryController extends BaseScene {
+  private roomCode = '';
+  private digitTexture: Texture2D | null = null;
+  private codeDigitNodes: Node[] = [];
+  private codeDigitHeight = 72;
+  private codeDigitWidth = 40;
+
+  async start(): Promise<void> {
+    console.log('[RoomEntryController] start');
+    await this.enter();
+    this.buildRuntimeUi();
+  }
+
+  private buildRuntimeUi(): void {
+    let canvas = ensureCanvas(this.node);
+    canvas.removeAllChildren();
+    canvas = ensureCanvas(this.node);
+    const layout = createLayout();
+
+    this.createCoverImage(canvas, 'Background', 'textures/ui/room_entry_bg', layout.width, layout.height, ROOM_ENTRY_BG_RATIO);
+    createPanel(canvas, 'FallbackBackground', layout.width, layout.height, new Color(0, 0, 0, 25));
+
+    createImage(canvas, 'BackButton', 'textures/ui/button_back', layout.s(8), layout.s(8), layout.pos(-44, 39));
+    canvas.children.find((child) => child.name === 'BackButton')?.on('touch-end', () => loadScene('Lobby'));
+
+    const titleWidth = layout.w(30);
+    createImage(canvas, 'TitleImage', 'textures/ui/room_entry_title', titleWidth, titleWidth / ROOM_ENTRY_TITLE_RATIO, layout.pos(-24, 22));
+    createImage(canvas, 'RoomIcon', 'textures/ui/icon_room', layout.s(22), layout.s(22), layout.pos(-24, -5));
+
+    const codePanelWidth = layout.w(43);
+    const codePanelHeight = codePanelWidth / ROOM_CODE_PANEL_RATIO;
+    const codePanelPosition = layout.pos(22, 10);
+    createPanel(canvas, 'CodePanelFallback', codePanelWidth, codePanelHeight, new Color(14, 48, 39, 180), codePanelPosition);
+    createImage(canvas, 'RoomCodePanel', 'textures/ui/room_code_panel', codePanelWidth, codePanelHeight, codePanelPosition);
+    canvas.children.find((child) => child.name === 'RoomCodePanel')?.on('touch-end', () => this.openRoomCodeKeyboard());
+    canvas.children.find((child) => child.name === 'CodePanelFallback')?.on('touch-end', () => this.openRoomCodeKeyboard());
+    this.createRoomCodeDigits(canvas, codePanelPosition, codePanelWidth, codePanelHeight);
+
+    const buttonWidth = layout.w(24);
+    const buttonHeight = buttonWidth / ROOM_ENTRY_BUTTON_RATIO;
+
+    createImageButton(
+      canvas,
+      'CreateRoomButton',
+      '',
+      'textures/ui/button_create_room',
+      () => void this.createRoom(),
+      layout.pos(10, -17),
+      buttonWidth,
+      buttonHeight,
+    );
+
+    createImageButton(
+      canvas,
+      'JoinRoomButton',
+      '',
+      'textures/ui/button_join_room',
+      () => void this.joinRoom(),
+      layout.pos(34, -17),
+      buttonWidth,
+      buttonHeight,
+    );
+  }
+
+  private openRoomCodeKeyboard(): void {
+    const wxApi = (globalThis as { wx?: WechatKeyboardApi }).wx;
+    if (wxApi?.showKeyboard) {
+      wxApi.showKeyboard({
+        defaultValue: this.roomCode,
+        maxLength: 6,
+        multiple: false,
+        confirmHold: false,
+        confirmType: 'done',
+      });
+      wxApi.onKeyboardInput?.((event) => this.setRoomCode(event.value));
+      wxApi.onKeyboardConfirm?.((event) => this.setRoomCode(event.value));
+      wxApi.onKeyboardComplete?.((event) => this.setRoomCode(event.value));
+      return;
+    }
+
+    const browserInput = globalThis.prompt?.('请输入房间号', this.roomCode);
+    if (browserInput !== null && browserInput !== undefined) this.setRoomCode(browserInput);
+  }
+
+  private setRoomCode(value: string): void {
+    this.roomCode = value.replace(/\D/g, '').slice(0, 6);
+    this.renderCode();
+  }
+
+  private renderCode(): void {
+    this.codeDigitNodes.forEach((node, index) => {
+      const digit = this.roomCode[index];
+      node.active = Boolean(digit && this.digitTexture);
+      if (!digit || !this.digitTexture) return;
+      const frame = new SpriteFrame();
+      const rect = ROOM_CODE_DIGIT_RECTS[Number(digit)];
+      const textureHeight = this.digitTexture.height || 793;
+      frame.texture = this.digitTexture;
+      frame.rect = new Rect(rect.x, textureHeight - rect.yFromTop - rect.height, rect.width, rect.height);
+      const digitWidth = this.codeDigitHeight * (rect.width / rect.height);
+      ensureComponent(node, UITransform).setContentSize(digitWidth, this.codeDigitHeight);
+      ensureComponent(node, Sprite).spriteFrame = frame;
+    });
+  }
+
+  private createRoomCodeDigits(canvas: Node, panelPosition: Vec3, panelWidth: number, panelHeight: number): void {
+    const digitHeight = panelHeight * 0.3;
+    this.codeDigitHeight = digitHeight;
+    this.codeDigitWidth = panelWidth * 0.06;
+    const digitGap = panelWidth * 0.110;
+    this.codeDigitNodes = [];
+
+    for (let index = 0; index < 6; index += 1) {
+      const node = ensureChild(canvas, `RoomCodeDigit${index}`);
+      node.active = false;
+      node.setPosition(new Vec3(panelPosition.x + (index - 2.5) * digitGap, panelPosition.y, 0));
+      ensureComponent(node, UITransform).setContentSize(this.codeDigitWidth, this.codeDigitHeight);
+      const sprite = ensureComponent(node, Sprite);
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      this.codeDigitNodes.push(node);
+    }
+
+    resources.load('textures/ui/room_code_digits/texture', Texture2D, (err, texture) => {
+      if (err || !texture) {
+        console.warn('[RoomEntryController] failed to load room_code_digits', err);
+        return;
+      }
+      this.digitTexture = texture;
+      this.renderCode();
+    });
+  }
+
+  private createCoverImage(parent: Node, name: string, path: string, width: number, height: number, ratio: number): void {
+    const screenRatio = width / height;
+    const imageWidth = screenRatio > ratio ? width : height * ratio;
+    const imageHeight = imageWidth / ratio;
+    createImage(parent, name, path, imageWidth, imageHeight);
+  }
+
+  private async createRoom(): Promise<void> {
+    await roomManager.createRoom();
+    loadScene('Room');
+  }
+
+  private async joinRoom(): Promise<void> {
+    if (this.roomCode.length === 0) return;
+    await roomManager.joinRoom(this.roomCode);
+    loadScene('Room');
+  }
+}
+
+interface WechatKeyboardApi {
+  showKeyboard(options: {
+    defaultValue?: string;
+    maxLength?: number;
+    multiple?: boolean;
+    confirmHold?: boolean;
+    confirmType?: string;
+  }): void;
+  onKeyboardInput?(callback: (event: { value: string }) => void): void;
+  onKeyboardConfirm?(callback: (event: { value: string }) => void): void;
+  onKeyboardComplete?(callback: (event: { value: string }) => void): void;
+}

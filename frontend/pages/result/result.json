@@ -1,6 +1,0 @@
-{
-  "navigationBarTitleText": "结算",
-  "usingComponents": {
-    "score-panel": "../../components/score-panel/score-panel"
-  }
-}

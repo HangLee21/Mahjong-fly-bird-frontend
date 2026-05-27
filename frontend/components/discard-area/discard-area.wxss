@@ -1,6 +1,0 @@
-.discard {
-  min-height: 34px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-}

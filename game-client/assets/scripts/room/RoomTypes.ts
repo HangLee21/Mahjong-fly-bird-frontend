@@ -16,9 +16,10 @@ export interface RoomSeat {
 
 export interface RoomRules {
   preset: 'qujing-fei-xiao-ji-v1.5';
+  roundCount: 8 | 16 | 24 | 32;
   allowChow: boolean;
   fanCap: number;
-  publicKongTiles: 2;
+  publicKongTiles: 2 | 4;
   xiaoJiTile: '1-tiao';
   drawMode: 'fixed-wall-reserve' | 'kong-count-threshold';
   allowMultiWin: boolean;

@@ -1,5 +1,6 @@
 import type { PlayerGameView } from '../game/GameTypes';
 import type { RoomView } from '../room/RoomTypes';
+import type { ReplayRecord } from '../replay/ReplayTypes';
 
 export const mockRoom: RoomView = {
   roomId: '886688',
@@ -8,6 +9,7 @@ export const mockRoom: RoomView = {
   gameId: undefined,
   rules: {
     preset: 'qujing-fei-xiao-ji-v1.5',
+    roundCount: 16,
     allowChow: true,
     fanCap: 3,
     publicKongTiles: 2,
@@ -17,9 +19,9 @@ export const mockRoom: RoomView = {
   },
   seats: [
     { seatIndex: 0, user: { id: 'u_001', nickname: '玩家一' }, isReady: true, isOwner: true },
-    { seatIndex: 1, user: { id: 'ai_1', nickname: 'AI 东山' }, isAI: true, isReady: true },
-    { seatIndex: 2, user: { id: 'ai_2', nickname: 'AI 南盘' }, isAI: true, isReady: true },
-    { seatIndex: 3, user: { id: 'ai_3', nickname: 'AI 西桥' }, isAI: true, isReady: true },
+    { seatIndex: 1, isReady: false },
+    { seatIndex: 2, isReady: false },
+    { seatIndex: 3, isReady: false },
   ],
 };
 
@@ -51,6 +53,52 @@ export const mockGameView: PlayerGameView = {
     { type: 'DISCARD', tile: 1, actionId: 102 },
     { type: 'DISCARD', tile: 18, actionId: 103 },
     { type: 'KONG_CONCEALED', tile: 31, actionId: 201 },
+    { type: 'WIN', tile: 31, actionId: 301 },
     { type: 'PASS', actionId: 1 },
+  ],
+};
+
+export const mockFinishedGameView: PlayerGameView = {
+  ...mockGameView,
+  status: 'FINISHED',
+  legalActions: [],
+  result: {
+    winnerIndexes: [0],
+    loserIndexes: [1, 2, 3],
+    dealer: 0,
+    isSelfDraw: true,
+    baseScore: 1,
+    cappedFan: 3,
+    fanItems: [
+      { code: 'MEN_QING_ZI_MO', name: '门清自摸', fan: 1, points: 2 },
+      { code: 'NO_XIAO_JI_WILD', name: '无鸡', fan: 1, points: 2 },
+      { code: 'KONG_FLOWER', name: '杠上开花', fan: 1, points: 2 },
+    ],
+    scoreDelta: [24, -8, -8, -8],
+    title: '自摸胡牌',
+    description: 'Mock 结算用于验证 Result 场景和番型展示。',
+  },
+};
+
+export function mockGameEvents(actionType: string) {
+  return [
+    {
+      id: `mock_event_${mockGameView.stepIndex}`,
+      type: actionType,
+      playerIndex: 0,
+      message: `玩家一执行 ${actionType}`,
+      stepIndex: mockGameView.stepIndex,
+      ts: Date.now(),
+    },
+  ];
+}
+
+export const mockReplay: ReplayRecord = {
+  roomId: mockRoom.roomId,
+  gameId: mockGameView.gameId,
+  title: '曲靖飞小鸡 Mock 牌谱',
+  steps: [
+    { stepIndex: 18, view: mockGameView, events: mockGameEvents('DISCARD') },
+    { stepIndex: 19, view: mockFinishedGameView, events: mockGameEvents('WIN') },
   ],
 };

@@ -1,6 +1,0 @@
-{
-  "component": true,
-  "usingComponents": {
-    "score-panel": "../score-panel/score-panel"
-  }
-}

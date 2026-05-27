@@ -2,29 +2,50 @@ declare module 'cc' {
   export class Component {
     node: Node;
     schedule?(callback: () => void, interval?: number): void;
+    scheduleOnce?(callback: () => void, delay?: number): void;
     unschedule?(callback: () => void): void;
   }
   export class Node {
+    constructor(name?: string);
     active: boolean;
+    layer: number;
     name: string;
     children: Node[];
     position: Vec3;
     setPosition(x: number | Vec3, y?: number, z?: number): void;
     addChild(node: Node): void;
     removeAllChildren(): void;
+    addComponent<T>(ctor: new (...args: never[]) => T): T;
     getComponent<T>(ctor: new (...args: never[]) => T): T | null;
     on(type: string, callback: (...args: never[]) => void, target?: unknown): void;
     off(type: string, callback: (...args: never[]) => void, target?: unknown): void;
   }
-  export class SpriteFrame {}
-  export class Sprite { spriteFrame: SpriteFrame | null; }
-  export class Label { string: string; }
+  export class Rect { constructor(x?: number, y?: number, width?: number, height?: number); x: number; y: number; width: number; height: number; }
+  export class SpriteFrame { texture: Texture2D; rect: Rect; }
+  export class Texture2D { width: number; height: number; }
+  export class Sprite {
+    static SizeMode: { CUSTOM: number; TRIMMED: number; RAW: number };
+    spriteFrame: SpriteFrame | null;
+    color: Color;
+    sizeMode: number;
+  }
+  export class Label { string: string; color: Color; fontSize: number; lineHeight: number; }
+  export class Button {}
+  export class Color { constructor(r?: number, g?: number, b?: number, a?: number); static WHITE: Color; static BLACK: Color; }
+  export class Camera {
+    static ProjectionType: { ORTHO: number; PERSPECTIVE: number };
+    projection: number;
+    visibility: number;
+    orthoHeight: number;
+  }
+  export class Canvas { cameraComponent: Camera | null; }
   export class Prefab {}
   export class AudioClip {}
   export class AudioSource { clip: AudioClip | null; volume: number; playOneShot(clip: AudioClip, volume?: number): void; }
   export class Vec3 { constructor(x?: number, y?: number, z?: number); x: number; y: number; z: number; static ZERO: Vec3; }
   export class Size { constructor(width?: number, height?: number); width: number; height: number; }
   export class UITransform { width: number; height: number; setContentSize(width: number, height: number): void; }
+  export class View { getVisibleSize(): Size; getDesignResolutionSize(): Size; }
   export class EventTarget { on(type: string, callback: (...args: never[]) => void, target?: unknown): void; off(type: string, callback: (...args: never[]) => void, target?: unknown): void; emit(type: string, ...args: unknown[]): void; }
   export const _decorator: {
     ccclass: (name: string) => ClassDecorator;
@@ -39,6 +60,8 @@ declare module 'cc' {
   export const tween: (target: unknown) => TweenLike;
   export const resources: { load<T>(path: string, type: new (...args: never[]) => T, cb: (err: Error | null, asset: T) => void): void };
   export const assetManager: unknown;
-  export const director: { loadScene(name: string): void };
+  export const director: { loadScene(name: string, onLaunched?: () => void): void };
+  export const view: View;
   export const sys: { localStorage: { getItem(key: string): string | null; setItem(key: string, value: string): void; removeItem(key: string): void } };
+  export const Layers: { Enum: { UI_2D: number } };
 }

@@ -1,6 +1,7 @@
 import { AppConfig } from '../app/AppConfig';
 import { GameEvents } from '../app/GameEvents';
 import { eventBus } from '../core/EventBus';
+import { MockWsClient } from '../mock/MockWsClient';
 import { Storage } from '../utils/Storage';
 import { createRequestId } from '../utils/Id';
 import { ReconnectPolicy } from './ReconnectPolicy';
@@ -95,4 +96,4 @@ export class WsClient {
   }
 }
 
-export const wsClient = new WsClient();
+export const wsClient = AppConfig.USE_MOCK_WS ? new MockWsClient() : new WsClient();

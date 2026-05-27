@@ -1,8 +1,0 @@
-{
-  "component": true,
-  "usingComponents": {
-    "tile-card": "../tile-card/tile-card",
-    "meld-area": "../meld-area/meld-area",
-    "discard-area": "../discard-area/discard-area"
-  }
-}

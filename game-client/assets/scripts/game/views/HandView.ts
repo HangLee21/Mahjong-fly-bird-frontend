@@ -2,6 +2,7 @@ import { _decorator, Component, Node, Prefab, instantiate, Vec3 } from 'cc';
 import { GameEvents } from '../../app/GameEvents';
 import { eventBus } from '../../core/EventBus';
 import { sortTiles } from '../../utils/TileUtils';
+import { ensureComponent } from '../../ui/RuntimeUi';
 import type { TileId } from '../GameTypes';
 import { TileView } from './TileView';
 
@@ -25,11 +26,11 @@ export class HandView extends Component {
       const node = this.tilePrefab ? instantiate(this.tilePrefab) : new Node();
       this.node.addChild(node);
       node.setPosition(new Vec3((index - sorted.length / 2) * 42, selectedTile === tileId ? 14 : 0, 0));
-      const tile = node.getComponent(TileView) || new TileView();
+      const tile = ensureComponent(node, TileView);
       tile.setTile(tileId);
       tile.setDisabled(!legal.has(tileId));
       tile.setSelected(selectedTile === tileId);
-      node.on('click', () => eventBus.emit(GameEvents.DISCARD_REQUESTED, tileId));
+      node.on('touch-end', () => eventBus.emit(GameEvents.DISCARD_REQUESTED, tileId));
       this.tiles.push(tile);
     });
   }

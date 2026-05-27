@@ -23,8 +23,10 @@ export class PlayerSeatView extends Component {
   }
 
   private renderBackTiles(count: number, position: LocalSeatPosition): void {
-    const container = new Node();
-    this.node.addChild(container);
+    const existing = this.node.children.find((child) => child.name === 'BackTiles');
+    if (existing) existing.removeAllChildren();
+    const container = existing || new Node('BackTiles');
+    if (!existing) this.node.addChild(container);
     const max = Math.min(count, 13);
     for (let index = 0; index < max; index += 1) {
       const node = this.backTilePrefab ? instantiate(this.backTilePrefab) : new Node();

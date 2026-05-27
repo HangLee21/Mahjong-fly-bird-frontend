@@ -1,3 +1,0 @@
-<view class="discard">
-  <tile-card wx:for="{{tiles}}" wx:key="index" tile="{{item}}" small latest="{{latestTile === item && index === tiles.length - 1}}" />
-</view>

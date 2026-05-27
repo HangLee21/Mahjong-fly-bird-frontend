@@ -20,3 +20,5 @@ npm test
 ```
 
 在 Cocos Creator 3.x 中打开 `game-client/`，按 `docs/scene_flow.md` 创建/绑定场景与预制体，然后构建目标选择“微信小游戏”。
+
+当前已提供 `assets/scenes/Boot.scene`、`Login.scene`、`Lobby.scene`、`Room.scene`、`Game.scene`、`Result.scene`、`Replay.scene` 七个场景占位，以及 `assets/prefabs/` 下的基础牌桌预制体占位。Mock HTTP/WS 默认开启，可先跑通本地闭环，再替换真实后端。

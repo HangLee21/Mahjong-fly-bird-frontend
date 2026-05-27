@@ -1,5 +1,0 @@
-<view wx:if="{{visible}}" class="mask">
-  <view class="modal">
-    <score-panel result="{{result}}" />
-  </view>
-</view>

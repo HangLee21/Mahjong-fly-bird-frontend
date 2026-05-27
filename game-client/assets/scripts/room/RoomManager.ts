@@ -12,6 +12,12 @@ export class RoomManager {
     return result.room;
   }
 
+  async joinRoom(roomId: string): Promise<RoomView> {
+    const room = await roomApi.joinRoom(roomId);
+    this.setRoom(room);
+    return room;
+  }
+
   async addAi(seatIndex: number): Promise<RoomView> {
     if (!this.currentRoom) throw new Error('当前没有房间');
     const room = await roomApi.addAi(this.currentRoom.roomId, seatIndex);

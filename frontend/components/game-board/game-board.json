@@ -1,6 +1,0 @@
-{
-  "component": true,
-  "usingComponents": {
-    "action-panel": "../action-panel/action-panel"
-  }
-}

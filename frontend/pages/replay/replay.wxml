@@ -1,8 +1,0 @@
-<view class="page replay">
-  <view class="toolbar">
-    <button bindtap="onPrev">上一步</button>
-    <text>{{index + 1}} / {{replay ? replay.steps.length : 0}}</text>
-    <button bindtap="onNext">下一步</button>
-  </view>
-  <game-board view="{{view}}" legalDiscardTiles="{{[]}}" selectedTile="{{null}}" submitting="{{true}}" />
-</view>

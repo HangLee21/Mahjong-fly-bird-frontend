@@ -1,6 +1,0 @@
-{
-  "component": true,
-  "usingComponents": {
-    "tile-card": "../tile-card/tile-card"
-  }
-}

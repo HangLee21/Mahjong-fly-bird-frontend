@@ -1,6 +1,8 @@
-import { _decorator, Component, Sprite, SpriteFrame, tween, Vec3 } from 'cc';
+import { _decorator, Component, Label, resources, Sprite, SpriteFrame, Texture2D, tween, Vec3 } from 'cc';
 import { getTileTexturePath, TILE_BACK_TEXTURE } from '../../assets/TileAssetMap';
 import type { TileId } from '../GameTypes';
+import { getTileLabel } from '../../utils/TileUtils';
+import { createLabel, ensureChild, ensureComponent } from '../../ui/RuntimeUi';
 
 const { ccclass, property } = _decorator;
 
@@ -18,11 +20,13 @@ export class TileView extends Component {
     this.tileId = tileId;
     this.faceDown = false;
     this.loadSprite(getTileTexturePath(tileId));
+    this.renderFallbackLabel(getTileLabel(tileId));
   }
 
   setFaceDown(faceDown: boolean): void {
     this.faceDown = faceDown;
     this.loadSprite(faceDown ? TILE_BACK_TEXTURE : this.tileId === null ? TILE_BACK_TEXTURE : getTileTexturePath(this.tileId));
+    this.renderFallbackLabel(faceDown ? '背' : this.tileId === null ? '背' : getTileLabel(this.tileId));
   }
 
   setSelected(selected: boolean): void {
@@ -32,6 +36,7 @@ export class TileView extends Component {
 
   setDisabled(disabled: boolean): void {
     this.disabled = disabled;
+    this.node.name = disabled ? `${this.node.name || 'Tile'}_disabled` : this.node.name || 'Tile';
   }
 
   playSelectAnimation(): void {
@@ -44,9 +49,37 @@ export class TileView extends Component {
     });
   }
 
-  private loadSprite(_path: string): void {
-    // Cocos editor binding: use AssetManager/BundleLoader to assign SpriteFrame at runtime.
-    // This stub keeps the component protocol stable for Codex and unit tests.
-    if (this.sprite) this.sprite.spriteFrame = this.sprite.spriteFrame as SpriteFrame | null;
+  private loadSprite(path: string): void {
+    if (!this.sprite) return;
+    resources.load(`${path}/spriteFrame`, SpriteFrame, (err, spriteFrame) => {
+      if (!err && spriteFrame) {
+        if (this.sprite) this.sprite.spriteFrame = spriteFrame;
+        return;
+      }
+      resources.load(`${path}/texture`, Texture2D, (textureErr, texture) => {
+        if (!textureErr && texture && this.sprite) {
+          const frame = new SpriteFrame() as SpriteFrame & { texture?: Texture2D };
+          frame.texture = texture;
+          this.sprite.spriteFrame = frame;
+        } else {
+          resources.load(path, Texture2D, (directTextureErr, directTexture) => {
+            if (!directTextureErr && directTexture && this.sprite) {
+              const frame = new SpriteFrame() as SpriteFrame & { texture?: Texture2D };
+              frame.texture = directTexture;
+              this.sprite.spriteFrame = frame;
+            } else {
+              console.warn(`[TileView] failed to load tile sprite: ${path}`, err || textureErr || directTextureErr);
+            }
+          });
+        }
+      });
+    });
+  }
+
+  private renderFallbackLabel(text: string): void {
+    const labelNode = ensureChild(this.node, 'TileLabel');
+    const label = ensureComponent(labelNode, Label);
+    label.string = text;
+    createLabel(this.node, 'TileDebugLabel', text);
   }
 }

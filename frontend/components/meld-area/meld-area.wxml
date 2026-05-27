@@ -1,6 +1,0 @@
-<view class="melds">
-  <view wx:for="{{melds}}" wx:key="stepIndex" class="meld">
-    <tile-card wx:for="{{item.tiles}}" wx:for-item="tile" wx:key="*this" tile="{{tile}}" small />
-    <text class="meld-type">{{item.type}}</text>
-  </view>
-</view>
