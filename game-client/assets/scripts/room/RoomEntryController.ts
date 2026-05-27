@@ -55,7 +55,7 @@ export class RoomEntryController extends BaseScene {
     this.createCoverImage(canvas, 'Background', 'textures/ui/room_entry_bg', layout.width, layout.height, ROOM_ENTRY_BG_RATIO);
     createPanel(canvas, 'FallbackBackground', layout.width, layout.height, new Color(0, 0, 0, 25));
 
-    createImage(canvas, 'BackButton', 'textures/ui/button_back', layout.s(8), layout.s(8), layout.pos(-44, 39));
+    createImage(canvas, 'BackButton', 'textures/ui/button_back', layout.s(8), layout.s(8), layout.pos(-40, 30));
     canvas.children.find((child) => child.name === 'BackButton')?.on('touch-end', () => loadScene('Lobby'));
 
     const titleWidth = layout.w(30);

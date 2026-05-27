@@ -33,14 +33,14 @@ export class LobbyController extends BaseScene {
     this.createCoverImage(canvas, 'Background', 'textures/ui/lobby_bg', layout.width, layout.height, LOBBY_BG_RATIO);
 
     const panelWidth = layout.w(46);
-    createImage(
-      canvas,
-      'MainPanel',
-      'textures/ui/panel_main',
-      panelWidth,
-      panelWidth / PANEL_MAIN_RATIO,
-      layout.pos(23, -2),
-    );
+    // createImage(
+    //   canvas,
+    //   'MainPanel',
+    //   'textures/ui/panel_main',
+    //   panelWidth,
+    //   panelWidth / PANEL_MAIN_RATIO,
+    //   layout.pos(23, -2),
+    // );
 
     const logoWidth = layout.w(32);
     createImage(
@@ -49,7 +49,7 @@ export class LobbyController extends BaseScene {
       'textures/ui/lobby_logo',
       logoWidth,
       logoWidth / LOBBY_LOGO_RATIO,
-      layout.pos(-25, 10),
+      layout.pos(-25, 0),
     );
 
     // const iconHeight = layout.h(16);
@@ -69,7 +69,7 @@ export class LobbyController extends BaseScene {
       '',
       'textures/ui/button_primary',
       () => void this.createRoom(),
-      layout.pos(23, -26),
+      layout.pos(23, 0),
       buttonWidth,
       buttonWidth / BUTTON_PRIMARY_RATIO,
     );

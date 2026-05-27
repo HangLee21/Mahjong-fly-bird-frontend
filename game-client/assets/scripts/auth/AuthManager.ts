@@ -10,7 +10,7 @@ export class AuthManager {
 
   async mockLogin(): Promise<void> {
     this.token = 'mock-token';
-    this.user = { id: 'u_001', nickname: '玩家一' };
+    this.user = { id: 'u_001', nickname: '游客' };
     Storage.setToken(this.token);
     Storage.setUser(this.user);
     eventBus.emit(GameEvents.AUTH_CHANGED, this.snapshot());

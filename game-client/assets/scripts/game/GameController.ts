@@ -11,6 +11,7 @@ import {
   createLabel,
   createLayout,
   createPanel,
+  createRemoteImage,
   ensureCanvas,
   ensureChild,
   ensureComponent,
@@ -36,20 +37,6 @@ const ACTION_ORDER: ActionType[] = [
   'PASS',
 ];
 
-const ACTION_LABELS: Record<ActionType, string> = {
-  DISCARD: '出牌',
-  PASS: '过',
-  WIN: '胡',
-  PONG: '碰',
-  CHOW_LEFT: '吃左',
-  CHOW_MIDDLE: '吃中',
-  CHOW_RIGHT: '吃右',
-  KONG_EXPOSED: '明杠',
-  KONG_CONCEALED: '暗杠',
-  KONG_ADDED: '补杠',
-  SELECT_KONG_TILE: '选杠牌',
-};
-
 const ACTION_IMAGE_PATHS: Partial<Record<ActionType, string>> = {
   PASS: 'textures/ui/action_button_pass',
   WIN: 'textures/ui/action_button_win',
@@ -63,10 +50,16 @@ const ACTION_IMAGE_PATHS: Partial<Record<ActionType, string>> = {
   SELECT_KONG_TILE: 'textures/ui/action_button_select_kong',
 };
 
+const GAME_BG_RATIO = 1672 / 941;
+const PLAYER_PANEL_RATIO_SELF = 560 / 170;
+const PLAYER_PANEL_RATIO_OTHER = 460 / 150;
+const CENTER_STATUS_RATIO = 360 / 180;
+
 @ccclass('GameController')
 export class GameController extends BaseScene {
-  private canvas: Node | null = null;
   private resultVisible = false;
+  private selectedHandIndex: number | null = null;
+  private currentRound = 1;
 
   async start(): Promise<void> {
     console.log('[GameController] start');
@@ -101,18 +94,18 @@ export class GameController extends BaseScene {
     const snapshot = gameManager.snapshot();
     const view = snapshot.view;
     if (!view) return;
+    this.selectedHandIndex = null;
 
     let canvas = ensureCanvas(this.node);
     canvas.removeAllChildren();
     canvas = ensureCanvas(this.node);
-    this.canvas = canvas;
 
     const layout = createLayout();
     this.createBackground(canvas, layout);
     this.createTopHud(canvas, layout, view);
-    this.createCenterTable(canvas, layout, view);
+    this.createCenterStatus(canvas, layout, view);
     this.createPlayers(canvas, layout, view);
-    this.createSelfHand(canvas, layout, view, snapshot.selectedTile, snapshot.legalDiscardTiles);
+    this.createSelfHand(canvas, layout, view, snapshot.legalDiscardTiles);
     this.createActionPanel(canvas, layout, view.legalActions, snapshot.submitting);
 
     if (view.status === 'FINISHED' || view.status === 'DRAW') {
@@ -125,41 +118,37 @@ export class GameController extends BaseScene {
 
   private createBackground(canvas: Node, layout: RuntimeLayout): void {
     createPanel(canvas, 'BackgroundFallback', layout.width, layout.height, new Color(4, 45, 33, 255));
-    createImage(canvas, 'Background', 'textures/ui/game_bg', layout.width, layout.height);
-    const tableWidth = layout.w(66);
-    createPanel(canvas, 'TableFallback', tableWidth, tableWidth / 1.6, new Color(5, 96, 62, 230), layout.pos(0, 2));
-    createImage(canvas, 'GameTable', 'textures/ui/game_table', tableWidth, tableWidth / 1.6, layout.pos(0, 2));
+    this.createCoverImage(canvas, 'Background', 'textures/ui/game_bg', layout.width, layout.height, GAME_BG_RATIO);
   }
 
   private createTopHud(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
-    const hudWidth = layout.w(54);
-    createPanel(canvas, 'TopHudFallback', hudWidth, hudWidth / 10, new Color(9, 66, 49, 220), layout.pos(0, 43));
-    createImage(canvas, 'TopHud', 'textures/ui/hud_panel_top', hudWidth, hudWidth / 10, layout.pos(0, 43));
+    const hudWidth = layout.w(44);
+    const hudHeight = layout.h(7);
+    createPanel(canvas, 'TopHudFallback', hudWidth, hudHeight, new Color(8, 58, 43, 215), layout.pos(0, 42));
+    createImage(canvas, 'TopHud', 'textures/ui/hud_panel_top', hudWidth, hudHeight, layout.pos(0, 42));
     this.createText(
       canvas,
       'TopHudText',
       `房间 ${view.roomId}    剩余 ${view.wallTilesRemaining} 张    第 ${view.stepIndex} 手`,
-      layout.pos(0, 43),
-      layout.s(2.7),
+      layout.pos(0, 42),
+      layout.s(2.1),
       new Color(235, 248, 217, 255),
     );
   }
 
-  private createCenterTable(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
-    const centerWidth = layout.w(26);
-    createPanel(canvas, 'CenterStatusFallback', centerWidth, centerWidth / 2, new Color(9, 58, 45, 225), layout.pos(0, 9));
-    createImage(canvas, 'CenterStatusPanel', 'textures/ui/center_status_panel', centerWidth, centerWidth / 2, layout.pos(0, 9));
+  private createCenterStatus(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
+    const centerWidth = layout.w(18);
+    createImage(canvas, 'CenterStatusPanel', 'textures/ui/center_status_panel', centerWidth, centerWidth / CENTER_STATUS_RATIO, layout.pos(0, 3));
     const lastDiscard = view.lastDiscard ? `${getTileLabel(view.lastDiscard.tile)} / ${view.lastDiscard.fromPlayer}号位` : '无';
-    this.createText(canvas, 'CurrentPlayerText', `当前：${view.currentPlayer}号位`, layout.pos(0, 14), layout.s(2.5), new Color(255, 238, 168, 255));
-    this.createText(canvas, 'DealerText', `庄家：${view.dealer}号位`, layout.pos(0, 9), layout.s(2.35));
-    this.createText(canvas, 'LastDiscardText', `上张：${lastDiscard}`, layout.pos(0, 4), layout.s(2.15));
+    this.createText(canvas, 'CurrentPlayerText', `当前 ${view.currentPlayer}号`, layout.pos(0, 6.5), layout.s(1.75), new Color(255, 238, 168, 255));
+    this.createText(canvas, 'DealerText', `庄 ${view.dealer}号`, layout.pos(0, 2.8), layout.s(1.6));
+    this.createText(canvas, 'LastDiscardText', `上张 ${lastDiscard}`, layout.pos(0, -0.8), layout.s(1.45));
 
-    const kongWidth = layout.w(22);
-    createPanel(canvas, 'PublicKongFallback', kongWidth, kongWidth / 3.1, new Color(7, 50, 39, 210), layout.pos(0, -9));
-    createImage(canvas, 'PublicKongPanel', 'textures/ui/public_kong_panel', kongWidth, kongWidth / 3.1, layout.pos(0, -9));
-    this.createText(canvas, 'XiaoJiText', view.xiaoJiActiveAsWild ? '小鸡万能开启' : '小鸡万能关闭', layout.pos(0, -13), layout.s(2.05));
-    view.publicKongTiles.forEach((tile, index) => {
-      this.createTile(canvas, `PublicKongTile${index}`, tile, layout.pos(-4 + index * 8, -7), layout.w(4.2), layout.w(5.6));
+    const kongWidth = layout.w(18);
+    createImage(canvas, 'PublicKongPanel', 'textures/ui/public_kong_panel', kongWidth, kongWidth / 3.1, layout.pos(0, -11));
+    this.createText(canvas, 'XiaoJiText', view.xiaoJiActiveAsWild ? '小鸡万能' : '小鸡关闭', layout.pos(0, -13.5), layout.s(1.5));
+    view.publicKongTiles.slice(0, 4).forEach((tile, index) => {
+      this.createTile(canvas, `PublicKongTile${index}`, tile, layout.pos(-4.5 + index * 3, -9.8), layout.w(2.4), layout.w(3.25));
     });
   }
 
@@ -172,8 +161,8 @@ export class GameController extends BaseScene {
       status: 'SELF',
       nickname: '我',
     };
-    this.createPlayerArea(canvas, layout, view, selfPlayer, 'bottom');
 
+    this.createPlayerArea(canvas, layout, view, selfPlayer, 'bottom');
     view.opponents.forEach((player) => {
       this.createPlayerArea(canvas, layout, view, player, this.positionForOpponent(view.playerIndex, player.seatIndex));
     });
@@ -183,22 +172,22 @@ export class GameController extends BaseScene {
     const config = this.playerAreaConfig(layout, position);
     const root = ensureChild(canvas, `Player_${position}`);
     root.setPosition(config.position);
+    this.setNodeAngle(root, this.sideAngle(position));
     root.removeAllChildren();
 
     if (view.currentPlayer === player.seatIndex) {
-      createImage(root, 'TurnGlow', 'textures/ui/turn_glow', config.width * 1.18, config.height * 1.22);
+      createImage(root, 'TurnGlow', 'textures/ui/turn_glow', config.width * 1.12, config.height * 1.18);
     }
 
-    createPanel(root, 'PlayerPanelFallback', config.width, config.height, new Color(8, 60, 45, 225));
     createImage(root, 'PlayerPanel', position === 'bottom' ? 'textures/ui/player_panel_self' : 'textures/ui/player_panel_other', config.width, config.height);
-    const avatarSize = config.height * 0.52;
-    createPanel(root, 'AvatarFallback', avatarSize, avatarSize, new Color(214, 184, 92, 235), new Vec3(-config.width * 0.33, 0, 0));
-    createImage(root, 'AvatarFrame', 'textures/ui/avatar_frame_game', avatarSize, avatarSize, new Vec3(-config.width * 0.33, 0, 0));
-    this.createText(root, 'Nickname', player.nickname || `${player.seatIndex}号位`, new Vec3(config.width * 0.1, config.height * 0.14, 0), layout.s(position === 'bottom' ? 2.35 : 2.0));
-    this.createText(root, 'Score', `分数 ${view.scores[player.seatIndex] ?? 0}`, new Vec3(config.width * 0.1, -config.height * 0.18, 0), layout.s(position === 'bottom' ? 2.1 : 1.85), new Color(255, 234, 166, 255));
+    const avatarSize = config.height * 0.76;
+    const avatarPosition = this.avatarPosition(config.width, config.height, position);
+    createRemoteImage(root, 'Avatar', player.avatarUrl || '', 'textures/ui/default_avatar', avatarSize, avatarSize, avatarPosition);
+    this.createText(root, 'Nickname', player.nickname || `${player.seatIndex}号位`, new Vec3(config.width * 0.1, config.height * 0.14, 0), layout.s(position === 'bottom' ? 1.85 : 1.55));
+    this.createText(root, 'Score', `分数 ${view.scores[player.seatIndex] ?? 0}`, new Vec3(config.width * 0.1, -config.height * 0.2, 0), layout.s(position === 'bottom' ? 1.65 : 1.4), new Color(255, 234, 166, 255));
 
     if (view.dealer === player.seatIndex) {
-      createImage(root, 'DealerBadge', 'textures/ui/dealer_badge', avatarSize * 0.42, avatarSize * 0.42, new Vec3(-config.width * 0.48, config.height * 0.28, 0));
+      createImage(root, 'DealerBadge', 'textures/ui/dealer_badge', avatarSize * 0.42, avatarSize * 0.42, new Vec3(avatarPosition.x - avatarSize * 0.38, avatarPosition.y + avatarSize * 0.35, 0));
     }
 
     this.createDiscardArea(canvas, layout, position, player.discards);
@@ -210,12 +199,13 @@ export class GameController extends BaseScene {
     const config = this.discardAreaConfig(layout, position);
     const area = ensureChild(canvas, `Discard_${position}`);
     area.setPosition(config.position);
+    this.setNodeAngle(area, this.sideAngle(position));
     area.removeAllChildren();
     createImage(area, 'DiscardAreaBg', 'textures/ui/discard_area', config.width, config.height);
     discards.slice(-18).forEach((tile, index) => {
       const col = index % 6;
       const row = Math.floor(index / 6);
-      this.createTile(area, `DiscardTile${index}`, tile, new Vec3((col - 2.5) * config.tileW, config.height * 0.22 - row * config.tileH * 0.72, 0), config.tileW, config.tileH);
+      this.createTile(area, `DiscardTile${index}`, tile, new Vec3((col - 2.5) * config.tileW * 0.86, config.height * 0.2 - row * config.tileH * 0.66, 0), config.tileW, config.tileH);
     });
   }
 
@@ -223,10 +213,11 @@ export class GameController extends BaseScene {
     const config = this.meldAreaConfig(layout, position);
     const area = ensureChild(canvas, `Meld_${position}`);
     area.setPosition(config.position);
+    this.setNodeAngle(area, this.sideAngle(position));
     area.removeAllChildren();
     createImage(area, 'MeldAreaBg', 'textures/ui/meld_area', config.width, config.height);
     tiles.slice(0, 12).forEach((tile, index) => {
-      this.createTile(area, `MeldTile${index}`, tile, new Vec3((index - 5.5) * config.tileW * 0.64, 0, 0), config.tileW, config.tileH);
+      this.createTile(area, `MeldTile${index}`, tile, new Vec3((index - 5.5) * config.tileW * 0.62, 0, 0), config.tileW, config.tileH);
     });
   }
 
@@ -234,60 +225,72 @@ export class GameController extends BaseScene {
     const config = this.opponentHandConfig(layout, position);
     const area = ensureChild(canvas, `HandCount_${position}`);
     area.setPosition(config.position);
+    this.setNodeAngle(area, this.sideAngle(position));
     area.removeAllChildren();
     const displayCount = Math.min(count, 13);
     for (let index = 0; index < displayCount; index += 1) {
-      const offset = (index - displayCount / 2) * config.gap;
-      const positionVec = position === 'left' || position === 'right' ? new Vec3(0, offset, 0) : new Vec3(offset, 0, 0);
+      const offset = (index - (displayCount - 1) / 2) * config.gap;
+      const positionVec = new Vec3(offset, 0, 0);
       this.createTile(area, `BackTile${index}`, null, positionVec, config.tileW, config.tileH, true);
     }
-    this.createText(area, 'HandCountText', `${count}`, new Vec3(0, -config.tileH * 0.8, 0), layout.s(1.8));
+    this.createText(area, 'HandCountText', `${count}`, new Vec3(0, -config.tileH * 0.72, 0), layout.s(1.4), new Color(255, 255, 255, 255));
   }
 
-  private createSelfHand(canvas: Node, layout: RuntimeLayout, view: PlayerGameView, selectedTile: TileId | null, legalDiscardTiles: TileId[]): void {
+  private createSelfHand(canvas: Node, layout: RuntimeLayout, view: PlayerGameView, legalDiscardTiles: TileId[]): void {
     const handArea = ensureChild(canvas, 'SelfHandArea');
-    handArea.setPosition(layout.pos(10, -42));
+    handArea.setPosition(layout.pos(6, -32));
+    this.setNodeAngle(handArea, 0);
     handArea.removeAllChildren();
+
     const legal = new Set(legalDiscardTiles);
     const sorted = [...view.self.hand].sort((a, b) => a - b);
-    const tileW = layout.w(4.6);
+    const tileW = layout.w(3.15);
     const tileH = tileW * 1.36;
-    const gap = tileW * 0.86;
+    const gap = tileW * 0.82;
     sorted.forEach((tile, index) => {
       const node = this.createTile(
         handArea,
         `SelfTile${index}`,
         tile,
-        new Vec3((index - sorted.length / 2) * gap, selectedTile === tile ? tileH * 0.22 : 0, 0),
+        new Vec3((index - (sorted.length - 1) / 2) * gap, this.selectedHandIndex === index ? tileH * 0.22 : 0, 0),
         tileW,
         tileH,
       );
-      if (selectedTile === tile) createImage(node, 'SelectedGlow', 'textures/ui/tile_selected_glow', tileW * 1.18, tileH * 1.18);
-      node.active = legal.has(tile) || legal.size === 0;
-      node.on('touch-end', () => eventBus.emit(GameEvents.DISCARD_REQUESTED, tile));
+      node.active = true;
+      node.on('touch-end', () => {
+        if (legal.size > 0 && !legal.has(tile)) return;
+        if (this.selectedHandIndex === index) {
+          eventBus.emit(GameEvents.DISCARD_REQUESTED, tile);
+          return;
+        }
+
+        this.selectedHandIndex = index;
+        this.createSelfHand(canvas, layout, view, legalDiscardTiles);
+      });
     });
   }
 
   private createActionPanel(canvas: Node, layout: RuntimeLayout, actions: GameAction[], submitting: boolean): void {
     const panel = ensureChild(canvas, 'ActionPanel');
-    panel.setPosition(layout.pos(25, -23));
+    panel.setPosition(layout.pos(35, -27));
     panel.removeAllChildren();
     const visibleActions = actions
       .filter((action) => action.type !== 'DISCARD')
       .sort((a, b) => ACTION_ORDER.indexOf(a.type) - ACTION_ORDER.indexOf(b.type));
     panel.active = visibleActions.length > 0;
+
     visibleActions.forEach((action, index) => {
-      const width = action.type === 'WIN' ? layout.w(8.5) : action.type === 'SELECT_KONG_TILE' ? layout.w(10) : layout.w(7.4);
+      const width = action.type === 'WIN' ? layout.w(7) : action.type === 'SELECT_KONG_TILE' ? layout.w(8.4) : layout.w(6.2);
       const height = width / (action.type === 'WIN' ? 1.72 : action.type === 'SELECT_KONG_TILE' ? 2.24 : 1.68);
       createImageButton(
         panel,
         `Action_${action.type}_${index}`,
-        ACTION_LABELS[action.type],
+        '',
         ACTION_IMAGE_PATHS[action.type] || 'textures/ui/action_button_pass',
         () => {
           if (!submitting) eventBus.emit(GameEvents.ACTION_SELECTED, action);
         },
-        new Vec3((index - (visibleActions.length - 1) / 2) * width * 1.05, 0, 0),
+        new Vec3((index - (visibleActions.length - 1) / 2) * width * 1.02, 0, 0),
         width,
         height,
       );
@@ -298,40 +301,35 @@ export class GameController extends BaseScene {
     const layer = ensureChild(canvas, 'ResultDialogLayer');
     layer.removeAllChildren();
     createPanel(layer, 'Mask', layout.width, layout.height, new Color(0, 0, 0, 165));
-    const dialogWidth = layout.w(58);
-    const dialogHeight = layout.h(76);
+    const isFinal = this.isFinalRound();
+    const dialogWidth = isFinal ? layout.w(62) : layout.w(56);
+    const dialogHeight = isFinal ? layout.h(78) : layout.h(72);
     createPanel(layer, 'DialogFallback', dialogWidth, dialogHeight, new Color(9, 57, 43, 245));
-    createImage(layer, 'DialogBg', 'textures/ui/result_dialog_bg', dialogWidth, dialogHeight);
+    createImage(layer, 'DialogBg', isFinal ? 'textures/ui/final_result_dialog_bg' : 'textures/ui/result_dialog_bg', dialogWidth, dialogHeight);
 
     const result = view.result;
     const selfWon = Boolean(result?.winnerIndexes.includes(view.playerIndex));
-    const titlePath = result?.isDraw || view.status === 'DRAW' ? 'textures/ui/result_title_draw' : selfWon ? 'textures/ui/result_title_win' : 'textures/ui/result_title_lose';
-    createImage(layer, 'ResultTitleImage', titlePath, layout.w(25), layout.w(25) / 3.27, layout.pos(0, 27));
-    this.createText(layer, 'ResultTitleFallback', result?.title || (view.status === 'DRAW' ? '流局' : selfWon ? '胜利' : '结算'), layout.pos(0, 27), layout.s(4.2), new Color(255, 234, 164, 255));
+    this.createText(
+      layer,
+      'ResultTitle',
+      isFinal ? '总分结算' : result?.title || (view.status === 'DRAW' ? '流局' : selfWon ? '胡牌结算' : '本局结算'),
+      layout.pos(0, 27),
+      layout.s(3.6),
+      new Color(255, 234, 164, 255),
+    );
+    this.createText(layer, 'RoundText', `第 ${this.currentRound} / ${this.maxRoundCount()} 局`, layout.pos(0, 22.5), layout.s(2.0), new Color(218, 244, 205, 255));
 
     this.createResultScores(layer, layout, view, result);
     this.createFanList(layer, layout, result);
 
-    createImageButton(
-      layer,
-      'BackRoomButton',
-      '返回房间',
-      'textures/ui/button_back_room',
-      () => this.backToRoom(),
-      layout.pos(-11, -29),
-      layout.w(18),
-      layout.w(18) / 3.02,
-    );
-    createImageButton(
-      layer,
-      'ReplayButton',
-      '查看回放',
-      'textures/ui/button_replay',
-      () => loadScene('Replay'),
-      layout.pos(11, -29),
-      layout.w(18),
-      layout.w(18) / 3.02,
-    );
+    if (isFinal) {
+      createImageButton(layer, 'EndGameButton', '', 'textures/ui/button_back_room', () => this.backToRoom(), layout.pos(-11, -29), layout.w(18), layout.w(18) / 3.02);
+      createImageButton(layer, 'ReplayButton', '', 'textures/ui/button_replay', () => loadScene('Replay'), layout.pos(11, -29), layout.w(18), layout.w(18) / 3.02);
+      return;
+    }
+
+    createImageButton(layer, 'ContinueButton', '', 'textures/ui/button_continue', () => this.continueGame(), layout.pos(-11, -29), layout.w(18), layout.w(18) / 3.02);
+    createImageButton(layer, 'ReplayButton', '', 'textures/ui/button_replay', () => loadScene('Replay'), layout.pos(11, -29), layout.w(18), layout.w(18) / 3.02);
   }
 
   private createResultScores(layer: Node, layout: RuntimeLayout, view: PlayerGameView, result?: ScoreResult): void {
@@ -342,18 +340,18 @@ export class GameController extends BaseScene {
       const delta = deltas[index] || 0;
       const rowPath = delta >= 0 ? 'textures/ui/score_row_win' : 'textures/ui/score_row_lose';
       createImage(layer, `ScoreRow${index}`, rowPath, layout.w(46), layout.h(6.3), layout.pos(0, y));
-      this.createText(layer, `ScoreName${index}`, `${index}号 ${names[index] || '玩家'}`, layout.pos(-13, y), layout.s(2.25));
+      this.createText(layer, `ScoreName${index}`, `${index}号 ${names[index] || '玩家'}`, layout.pos(-14, y), layout.s(2.0));
       this.createText(layer, `ScoreDelta${index}`, `${delta >= 0 ? '+' : ''}${delta}`, layout.pos(13, y), layout.s(2.55), delta >= 0 ? new Color(255, 229, 137, 255) : new Color(170, 230, 255, 255));
     }
   }
 
   private createFanList(layer: Node, layout: RuntimeLayout, result?: ScoreResult): void {
     const fanItems = result?.fanItems || [];
-    this.createText(layer, 'FanTitle', '番型明细', layout.pos(0, -11), layout.s(2.6), new Color(255, 238, 170, 255));
+    this.createText(layer, 'FanTitle', '番型明细', layout.pos(0, -10), layout.s(2.35), new Color(255, 238, 170, 255));
     fanItems.slice(0, 4).forEach((item, index) => {
-      const y = -16 - index * 5.2;
+      const y = -15 - index * 4.8;
       createImage(layer, `FanItemBg${index}`, 'textures/ui/fan_item_bg', layout.w(42), layout.h(4.8), layout.pos(0, y));
-      this.createText(layer, `FanItemText${index}`, `${item.name}  ${item.points}分`, layout.pos(0, y), layout.s(2.0));
+      this.createText(layer, `FanItemText${index}`, `${item.name}  ${item.points}分`, layout.pos(0, y), layout.s(1.75));
     });
     if (fanItems.length === 0) this.createText(layer, 'FanEmptyText', '暂无番型明细', layout.pos(0, -17), layout.s(2.1));
   }
@@ -365,14 +363,13 @@ export class GameController extends BaseScene {
     ensureComponent(node, UITransform).setContentSize(width, height);
     const path = faceDown || tile === null ? TILE_BACK_TEXTURE : getTileTexturePath(tile);
     createImage(node, 'TileImage', path, width, height);
-    if (!faceDown && tile !== null) this.createText(node, 'TileFallbackText', getTileLabel(tile), new Vec3(0, 0, 0), Math.min(width * 0.35, height * 0.2), Color.BLACK);
     return node;
   }
 
   private async handleDiscard(tile: TileId): Promise<void> {
     if (this.resultVisible) return;
-    if (gameManager.selectedTile === tile) await gameManager.submitDiscard(tile);
-    else gameManager.selectTile(tile);
+    this.selectedHandIndex = null;
+    await gameManager.submitDiscard(tile);
   }
 
   private handleActionSelected = (action: GameAction): void => {
@@ -388,6 +385,26 @@ export class GameController extends BaseScene {
       });
     }
     loadScene('Room');
+  }
+
+  private continueGame(): void {
+    this.currentRound = Math.min(this.currentRound + 1, this.maxRoundCount());
+    this.resultVisible = false;
+    this.selectedHandIndex = null;
+    gameManager.setView({
+      ...mockGameView,
+      stepIndex: mockGameView.stepIndex + this.currentRound,
+      gameId: roomManager.currentRoom?.gameId || mockGameView.gameId,
+      roomId: roomManager.currentRoom?.roomId || mockGameView.roomId,
+    });
+  }
+
+  private isFinalRound(): boolean {
+    return this.currentRound >= this.maxRoundCount();
+  }
+
+  private maxRoundCount(): number {
+    return roomManager.currentRoom?.rules.roundCount || 16;
   }
 
   private createText(parent: Node, name: string, text: string, position: Vec3, fontSize: number, color = Color.WHITE): Label {
@@ -415,33 +432,55 @@ export class GameController extends BaseScene {
   }
 
   private playerAreaConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
-    if (position === 'bottom') return { width: layout.w(25), height: layout.w(25) / 3, position: layout.pos(-35, -35) };
-    if (position === 'right') return { width: layout.w(20), height: layout.w(20) / 2.7, position: layout.pos(42, 6) };
-    if (position === 'top') return { width: layout.w(20), height: layout.w(20) / 2.7, position: layout.pos(0, 32) };
-    return { width: layout.w(20), height: layout.w(20) / 2.7, position: layout.pos(-42, 6) };
+    if (position === 'bottom') return { width: layout.w(23), height: layout.w(23) / PLAYER_PANEL_RATIO_SELF, position: layout.pos(-39, -31) };
+    if (position === 'right') return { width: layout.w(17), height: layout.w(17) / PLAYER_PANEL_RATIO_OTHER, position: layout.pos(43, 3) };
+    if (position === 'top') return { width: layout.w(17), height: layout.w(17) / PLAYER_PANEL_RATIO_OTHER, position: layout.pos(0, 33) };
+    return { width: layout.w(17), height: layout.w(17) / PLAYER_PANEL_RATIO_OTHER, position: layout.pos(-43, 3) };
   }
 
   private discardAreaConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
-    const width = position === 'bottom' || position === 'top' ? layout.w(28) : layout.w(20);
-    const height = layout.h(15);
-    if (position === 'bottom') return { width, height, position: layout.pos(0, -18), tileW: layout.w(3.1), tileH: layout.w(4.1) };
-    if (position === 'right') return { width, height, position: layout.pos(25, 10), tileW: layout.w(2.6), tileH: layout.w(3.5) };
-    if (position === 'top') return { width, height, position: layout.pos(0, 18), tileW: layout.w(2.7), tileH: layout.w(3.6) };
-    return { width, height, position: layout.pos(-25, 10), tileW: layout.w(2.6), tileH: layout.w(3.5) };
+    const width = position === 'bottom' || position === 'top' ? layout.w(25) : layout.w(18);
+    const height = layout.h(12);
+    if (position === 'bottom') return { width, height, position: layout.pos(0, -17), tileW: layout.w(2.5), tileH: layout.w(3.35) };
+    if (position === 'right') return { width, height, position: layout.pos(24, 4), tileW: layout.w(2.25), tileH: layout.w(3.0) };
+    if (position === 'top') return { width, height, position: layout.pos(0, 17), tileW: layout.w(2.35), tileH: layout.w(3.15) };
+    return { width, height, position: layout.pos(-24, 4), tileW: layout.w(2.25), tileH: layout.w(3.0) };
   }
 
   private meldAreaConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
-    const width = position === 'bottom' ? layout.w(30) : layout.w(22);
-    const height = layout.h(8);
-    if (position === 'bottom') return { width, height, position: layout.pos(-20, -27), tileW: layout.w(3.3), tileH: layout.w(4.3) };
-    if (position === 'right') return { width, height, position: layout.pos(36, -16), tileW: layout.w(2.5), tileH: layout.w(3.4) };
-    if (position === 'top') return { width, height, position: layout.pos(-20, 26), tileW: layout.w(2.6), tileH: layout.w(3.5) };
-    return { width, height, position: layout.pos(-36, -16), tileW: layout.w(2.5), tileH: layout.w(3.4) };
+    const width = position === 'bottom' ? layout.w(26) : layout.w(20);
+    const height = layout.h(6.5);
+    if (position === 'bottom') return { width, height, position: layout.pos(-21, -25), tileW: layout.w(2.6), tileH: layout.w(3.5) };
+    if (position === 'right') return { width, height, position: layout.pos(34, -14), tileW: layout.w(2.1), tileH: layout.w(2.85) };
+    if (position === 'top') return { width, height, position: layout.pos(-18, 25), tileW: layout.w(2.15), tileH: layout.w(2.9) };
+    return { width, height, position: layout.pos(-34, -14), tileW: layout.w(2.1), tileH: layout.w(2.85) };
   }
 
   private opponentHandConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
-    if (position === 'right') return { position: layout.pos(35, 8), tileW: layout.w(2.3), tileH: layout.w(3.2), gap: layout.h(2.8) };
-    if (position === 'left') return { position: layout.pos(-35, 8), tileW: layout.w(2.3), tileH: layout.w(3.2), gap: layout.h(2.8) };
-    return { position: layout.pos(0, 25), tileW: layout.w(2.5), tileH: layout.w(3.4), gap: layout.w(2.0) };
+    if (position === 'right') return { position: layout.pos(37, 4), tileW: layout.w(1.8), tileH: layout.w(2.45), gap: layout.w(1.55) };
+    if (position === 'left') return { position: layout.pos(-37, 4), tileW: layout.w(1.8), tileH: layout.w(2.45), gap: layout.w(1.55) };
+    return { position: layout.pos(0, 25), tileW: layout.w(2.05), tileH: layout.w(2.75), gap: layout.w(1.68) };
+  }
+
+  private avatarPosition(width: number, height: number, position: LocalSeatPosition): Vec3 {
+    if (position === 'bottom') return new Vec3(-width * 0.29, height * 0.02, 0);
+    return new Vec3(-width * 0.4, height * 0.02, 0);
+  }
+
+  private sideAngle(position: LocalSeatPosition): number {
+    if (position === 'left') return -90;
+    if (position === 'right') return 90;
+    return 0;
+  }
+
+  private setNodeAngle(node: Node, angle: number): void {
+    (node as Node & { angle?: number }).angle = angle;
+  }
+
+  private createCoverImage(parent: Node, name: string, path: string, width: number, height: number, ratio: number): void {
+    const screenRatio = width / height;
+    const imageWidth = screenRatio > ratio ? width : height * ratio;
+    const imageHeight = imageWidth / ratio;
+    createImage(parent, name, path, imageWidth, imageHeight);
   }
 }

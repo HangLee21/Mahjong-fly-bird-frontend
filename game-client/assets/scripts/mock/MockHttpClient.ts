@@ -23,7 +23,7 @@ export class MockHttpClient {
     if (path === ApiRoutes.wechatLogin) {
       return {
         token: 'mock-token',
-        user: { id: 'u_001', nickname: '玩家一' },
+        user: { id: 'u_001', nickname: '游客' },
       } as T;
     }
 

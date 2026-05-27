@@ -1,4 +1,21 @@
-import { Button, Camera, Canvas, Color, Component, Label, Layers, Node, resources, Sprite, SpriteFrame, Texture2D, UITransform, Vec3, view } from 'cc';
+import {
+  assetManager,
+  Button,
+  Camera,
+  Canvas,
+  Color,
+  Component,
+  Label,
+  Layers,
+  Node,
+  resources,
+  Sprite,
+  SpriteFrame,
+  Texture2D,
+  UITransform,
+  Vec3,
+  view,
+} from 'cc';
 
 type ComponentCtor<T> = new (...args: never[]) => T;
 
@@ -95,6 +112,31 @@ export function createImage(parent: Node, name: string, path: string, width: num
   sprite.sizeMode = Sprite.SizeMode.CUSTOM;
   sprite.color = Color.WHITE;
   loadSpriteFrame(sprite, path);
+  return node;
+}
+
+export function createRemoteImage(parent: Node, name: string, url: string, fallbackPath: string, width: number, height: number, position = Vec3.ZERO): Node {
+  const node = createImage(parent, name, fallbackPath, width, height, position);
+  const sprite = ensureComponent(node, Sprite);
+  if (!url) return node;
+
+  const remoteLoader = assetManager as {
+    loadRemote<T>(remoteUrl: string, callback: (err: Error | null, asset: T | null) => void): void;
+  };
+
+  remoteLoader.loadRemote<unknown>(url, (err, imageAsset) => {
+    if (err || !imageAsset) {
+      console.warn(`[RuntimeUi] failed to load remote image: ${url}`, err);
+      return;
+    }
+
+    const texture = new Texture2D();
+    (texture as Texture2D & { image?: unknown }).image = imageAsset;
+    const frame = new SpriteFrame();
+    frame.texture = texture;
+    sprite.spriteFrame = frame;
+  });
+
   return node;
 }
 

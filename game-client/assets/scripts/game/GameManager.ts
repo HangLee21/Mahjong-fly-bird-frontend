@@ -42,7 +42,6 @@ export class GameManager {
 
   selectTile(tile: TileId | null): void {
     this.selectedTile = tile;
-    eventBus.emit(GameEvents.GAME_VIEW_CHANGED, this.snapshot());
   }
 
   async submitDiscard(tile: TileId): Promise<void> {
@@ -55,7 +54,6 @@ export class GameManager {
   async submitAction(action: GameAction): Promise<void> {
     if (!this.currentView || this.submitting) return;
     this.submitting = true;
-    eventBus.emit(GameEvents.GAME_VIEW_CHANGED, this.snapshot());
     const clientAction = buildClientAction(this.currentView, action);
     wsClient.send({
       type: 'GAME_ACTION',
