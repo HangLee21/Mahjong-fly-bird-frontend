@@ -80,21 +80,35 @@ export interface GameEvent {
 export interface PlayerGameView {
   roomId: string;
   gameId: string;
+  ruleVersion?: string;
   playerIndex: number;
   status: GameStatus;
   stepIndex: number;
   dealer: number;
   currentPlayer: number;
+  roundIndex?: number;
+  currentRound?: number;
+  maxRounds?: number;
+  isFinalRound?: boolean;
   scores: number[];
+  totalScores?: number[];
+  wallCount?: number;
   wallTilesRemaining: number;
   publicKongTiles: TileId[];
   xiaoJiActiveAsWild: boolean;
   restrictions?: string[];
   self: {
+    seatIndex?: number;
+    userId?: string;
+    isAI?: boolean;
+    handCount?: number;
     hand: TileId[];
     melds: Meld[];
     discards: TileId[];
+    status?: string;
+    legalActions?: GameAction[];
   };
+  players?: PlayerPublicView[];
   opponents: PlayerPublicView[];
   lastDiscard?: {
     tile: TileId;

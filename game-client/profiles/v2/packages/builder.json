@@ -8,11 +8,11 @@
       "1779436459472": {
         "type": "build",
         "id": "1779436459472",
-        "progress": 1,
-        "state": "success",
+        "progress": 0.09545454545454546,
+        "state": "processing",
         "stage": "build",
-        "message": "2026-5-27 21:04:18 build -> run success in 15 s!",
-        "detailMessage": "build task(wechatgame) in 15461!\r",
+        "message": "Build engine start...",
+        "detailMessage": "[buildEngineCommand]Module source \"cc\":\rexport * from 'E:\\\\cocos-creator\\\\Creator\\\\3.8.8\\\\resources\\\\resources\\\\3d\\\\engine\\\\exports\\\\2d.ts';\rexport * from 'E:\\\\cocos-creator\\\\Creator\\\\3.8.8\\\\resources...",
         "options": {
           "name": "qujing-mahjong-game-client",
           "server": "",
@@ -106,7 +106,7 @@
             ]
           }
         },
-        "time": "2026-5-27 21:04:02",
+        "time": "2026-6-1 11:31:20",
         "dirty": false
       }
     }

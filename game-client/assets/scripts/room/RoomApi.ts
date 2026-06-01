@@ -1,22 +1,33 @@
 import { ApiRoutes } from '../network/ApiRoutes';
 import { httpClient } from '../network/HttpClient';
-import type { RoomView } from './RoomTypes';
+import type { RoomPreview, RoomRules, RoomSeat, RoomView } from './RoomTypes';
+
+export type RoomResponse = RoomView | { room: RoomView };
+export type AddAiResponse = RoomResponse | RoomSeat | { seat: RoomSeat };
 
 export class RoomApi {
-  createRoom(): Promise<{ room: RoomView }> {
-    return httpClient.post(ApiRoutes.rooms, {});
+  createRoom(rules: RoomRules, roomId: string): Promise<{ room: RoomView }> {
+    return httpClient.post(ApiRoutes.rooms, { roomId, rules });
   }
 
-  joinRoom(roomId: string, seatIndex?: number): Promise<RoomView> {
+  joinRoom(roomId: string, seatIndex?: number): Promise<RoomResponse> {
     return httpClient.post(ApiRoutes.joinRoom(roomId), { seatIndex });
   }
 
-  addAi(roomId: string, seatIndex: number, model?: string): Promise<RoomView> {
+  previewRoom(roomId: string): Promise<RoomPreview> {
+    return httpClient.get(ApiRoutes.roomPreview(roomId));
+  }
+
+  addAi(roomId: string, seatIndex: number, model?: string): Promise<AddAiResponse> {
     return httpClient.post(ApiRoutes.addAi(roomId), { seatIndex, model });
   }
 
+  leaveRoom(roomId: string): Promise<RoomResponse> {
+    return httpClient.post(ApiRoutes.leaveRoom(roomId), {});
+  }
+
   startGame(roomId: string): Promise<{ roomId: string; gameId: string }> {
-    return httpClient.post(ApiRoutes.startGame(roomId));
+    return httpClient.post(ApiRoutes.startGame(roomId), {});
   }
 
   getRoom(roomId: string): Promise<RoomView> {

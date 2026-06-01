@@ -1,8 +1,13 @@
 export const ApiRoutes = {
+  bootstrap: '/app/bootstrap',
   wechatLogin: '/auth/wechat-login',
+  authSession: '/auth/session',
+  logout: '/auth/logout',
+  lobbySummary: '/lobby/summary',
   rooms: '/rooms',
   joinRoom: (roomId: string) => `/rooms/${roomId}/join`,
   leaveRoom: (roomId: string) => `/rooms/${roomId}/leave`,
+  roomPreview: (roomId: string) => `/rooms/${roomId}/preview`,
   addAi: (roomId: string) => `/rooms/${roomId}/add-ai`,
   startGame: (roomId: string) => `/rooms/${roomId}/start`,
   room: (roomId: string) => `/rooms/${roomId}`,

@@ -50,6 +50,15 @@ const ACTION_IMAGE_PATHS: Partial<Record<ActionType, string>> = {
   SELECT_KONG_TILE: 'textures/ui/action_button_select_kong',
 };
 
+const RESPONSE_ACTION_TYPES = new Set<ActionType>([
+  'WIN',
+  'PONG',
+  'KONG_EXPOSED',
+  'CHOW_LEFT',
+  'CHOW_MIDDLE',
+  'CHOW_RIGHT',
+]);
+
 const GAME_BG_RATIO = 1672 / 941;
 const PLAYER_PANEL_RATIO_SELF = 560 / 170;
 const PLAYER_PANEL_RATIO_OTHER = 460 / 150;
@@ -59,14 +68,18 @@ const CENTER_STATUS_RATIO = 360 / 180;
 export class GameController extends BaseScene {
   private resultVisible = false;
   private selectedHandIndex: number | null = null;
+  private lastTapTile: TileId | null = null;
+  private lastTapAt = 0;
   private currentRound = 1;
 
   async start(): Promise<void> {
     console.log('[GameController] start');
     await this.enter();
-    const roomId = roomManager.currentRoom?.roomId || mockGameView.roomId;
-    const gameId = roomManager.currentRoom?.gameId || mockGameView.gameId;
-    await this.enterGame(roomId, gameId);
+    const room = roomManager.currentRoom;
+    const roomId = room?.roomId || mockGameView.roomId;
+    const gameId = room?.gameId || mockGameView.gameId;
+    const subscribeRoomIds = [roomId, room?.internalRoomId].filter((id): id is string => Boolean(id));
+    await this.enterGame(roomId, gameId, subscribeRoomIds);
   }
 
   onDestroy(): void {
@@ -75,10 +88,10 @@ export class GameController extends BaseScene {
     eventBus.off(GameEvents.ACTION_SELECTED, this.handleActionSelected, this);
   }
 
-  async enterGame(roomId: string, gameId: string): Promise<void> {
+  async enterGame(roomId: string, gameId: string, subscribeRoomIds: string[] = [roomId]): Promise<void> {
     gameManager.bindNetwork();
     this.bindEvents();
-    await gameManager.enterGame(roomId, gameId);
+    await gameManager.enterGame(roomId, gameId, subscribeRoomIds);
   }
 
   private bindEvents(): void {
@@ -94,7 +107,6 @@ export class GameController extends BaseScene {
     const snapshot = gameManager.snapshot();
     const view = snapshot.view;
     if (!view) return;
-    this.selectedHandIndex = null;
 
     let canvas = ensureCanvas(this.node);
     canvas.removeAllChildren();
@@ -107,6 +119,8 @@ export class GameController extends BaseScene {
     this.createPlayers(canvas, layout, view);
     this.createSelfHand(canvas, layout, view, snapshot.legalDiscardTiles);
     this.createActionPanel(canvas, layout, view.legalActions, snapshot.submitting);
+    this.createKongTileChoice(canvas, layout, view.legalActions, snapshot.submitting);
+    this.createResponseHint(canvas, layout, view);
 
     if (view.status === 'FINISHED' || view.status === 'DRAW') {
       this.resultVisible = true;
@@ -122,33 +136,33 @@ export class GameController extends BaseScene {
   }
 
   private createTopHud(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
-    const hudWidth = layout.w(44);
-    const hudHeight = layout.h(7);
-    createPanel(canvas, 'TopHudFallback', hudWidth, hudHeight, new Color(8, 58, 43, 215), layout.pos(0, 42));
-    createImage(canvas, 'TopHud', 'textures/ui/hud_panel_top', hudWidth, hudHeight, layout.pos(0, 42));
+    const hudWidth = layout.w(38);
+    const hudHeight = layout.h(5.6);
+    createPanel(canvas, 'TopHudFallback', hudWidth, hudHeight, new Color(8, 58, 43, 215), layout.pos(0, 37));
+    createImage(canvas, 'TopHud', 'textures/ui/hud_panel_top', hudWidth, hudHeight, layout.pos(0, 37));
     this.createText(
       canvas,
       'TopHudText',
-      `房间 ${view.roomId}    剩余 ${view.wallTilesRemaining} 张    第 ${view.stepIndex} 手`,
-      layout.pos(0, 42),
-      layout.s(2.1),
+      `房间 ${this.displayRoomId(view)}    剩余 ${view.wallTilesRemaining} 张    第 ${view.stepIndex} 手`,
+      layout.pos(0, 37),
+      layout.s(1.8),
       new Color(235, 248, 217, 255),
     );
   }
 
   private createCenterStatus(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
-    const centerWidth = layout.w(18);
-    createImage(canvas, 'CenterStatusPanel', 'textures/ui/center_status_panel', centerWidth, centerWidth / CENTER_STATUS_RATIO, layout.pos(0, 3));
+    const centerWidth = layout.w(15);
+    createImage(canvas, 'CenterStatusPanel', 'textures/ui/center_status_panel', centerWidth, centerWidth / CENTER_STATUS_RATIO, layout.pos(0, 2));
     const lastDiscard = view.lastDiscard ? `${getTileLabel(view.lastDiscard.tile)} / ${view.lastDiscard.fromPlayer}号位` : '无';
-    this.createText(canvas, 'CurrentPlayerText', `当前 ${view.currentPlayer}号`, layout.pos(0, 6.5), layout.s(1.75), new Color(255, 238, 168, 255));
-    this.createText(canvas, 'DealerText', `庄 ${view.dealer}号`, layout.pos(0, 2.8), layout.s(1.6));
-    this.createText(canvas, 'LastDiscardText', `上张 ${lastDiscard}`, layout.pos(0, -0.8), layout.s(1.45));
+    this.createText(canvas, 'CurrentPlayerText', `当前 ${view.currentPlayer}号`, layout.pos(0, 5.1), layout.s(1.55), new Color(255, 238, 168, 255));
+    this.createText(canvas, 'DealerText', `庄 ${view.dealer}号`, layout.pos(0, 2), layout.s(1.4));
+    this.createText(canvas, 'LastDiscardText', `上张 ${lastDiscard}`, layout.pos(0, -1.1), layout.s(1.25));
 
-    const kongWidth = layout.w(18);
-    createImage(canvas, 'PublicKongPanel', 'textures/ui/public_kong_panel', kongWidth, kongWidth / 3.1, layout.pos(0, -11));
-    this.createText(canvas, 'XiaoJiText', view.xiaoJiActiveAsWild ? '小鸡万能' : '小鸡关闭', layout.pos(0, -13.5), layout.s(1.5));
+    const kongWidth = layout.w(16);
+    createImage(canvas, 'PublicKongPanel', 'textures/ui/public_kong_panel', kongWidth, kongWidth / 3.1, layout.pos(0, -9.5));
+    this.createText(canvas, 'XiaoJiText', view.xiaoJiActiveAsWild ? '小鸡万能' : '小鸡关闭', layout.pos(0, -12), layout.s(1.3));
     view.publicKongTiles.slice(0, 4).forEach((tile, index) => {
-      this.createTile(canvas, `PublicKongTile${index}`, tile, layout.pos(-4.5 + index * 3, -9.8), layout.w(2.4), layout.w(3.25));
+      this.createTile(canvas, `PublicKongTile${index}`, tile, layout.pos(-4 + index * 2.7, -8.4), layout.w(2.05), layout.w(2.8));
     });
   }
 
@@ -190,22 +204,28 @@ export class GameController extends BaseScene {
       createImage(root, 'DealerBadge', 'textures/ui/dealer_badge', avatarSize * 0.42, avatarSize * 0.42, new Vec3(avatarPosition.x - avatarSize * 0.38, avatarPosition.y + avatarSize * 0.35, 0));
     }
 
-    this.createDiscardArea(canvas, layout, position, player.discards);
+    this.createDiscardArea(canvas, layout, position, player.discards, view.lastDiscard?.fromPlayer === player.seatIndex ? view.lastDiscard.tile : null);
     this.createMeldArea(canvas, layout, position, player.melds.map((meld) => meld.tiles).flat());
     if (position !== 'bottom') this.createOpponentHandCount(canvas, layout, position, player.handCount);
   }
 
-  private createDiscardArea(canvas: Node, layout: RuntimeLayout, position: LocalSeatPosition, discards: TileId[]): void {
+  private createDiscardArea(canvas: Node, layout: RuntimeLayout, position: LocalSeatPosition, discards: TileId[], highlightedTile: TileId | null): void {
     const config = this.discardAreaConfig(layout, position);
     const area = ensureChild(canvas, `Discard_${position}`);
     area.setPosition(config.position);
     this.setNodeAngle(area, this.sideAngle(position));
     area.removeAllChildren();
     createImage(area, 'DiscardAreaBg', 'textures/ui/discard_area', config.width, config.height);
-    discards.slice(-18).forEach((tile, index) => {
+    const visibleDiscards = discards.slice(-18);
+    const lastHighlightIndex = highlightedTile === null ? -1 : findLastIndex(visibleDiscards, (tile) => tile === highlightedTile);
+    visibleDiscards.forEach((tile, index) => {
       const col = index % 6;
       const row = Math.floor(index / 6);
-      this.createTile(area, `DiscardTile${index}`, tile, new Vec3((col - 2.5) * config.tileW * 0.86, config.height * 0.2 - row * config.tileH * 0.66, 0), config.tileW, config.tileH);
+      const tilePosition = new Vec3((col - 2.5) * config.tileW * 0.86, config.height * 0.2 - row * config.tileH * 0.66, 0);
+      if (index === lastHighlightIndex) {
+        createPanel(area, `DiscardTileGlow${index}`, config.tileW * 1.18, config.tileH * 1.14, new Color(255, 218, 82, 175), tilePosition);
+      }
+      this.createTile(area, `DiscardTile${index}`, tile, tilePosition, config.tileW, config.tileH);
     });
   }
 
@@ -238,33 +258,40 @@ export class GameController extends BaseScene {
 
   private createSelfHand(canvas: Node, layout: RuntimeLayout, view: PlayerGameView, legalDiscardTiles: TileId[]): void {
     const handArea = ensureChild(canvas, 'SelfHandArea');
-    handArea.setPosition(layout.pos(6, -32));
+    handArea.setPosition(layout.pos(4, -33));
     this.setNodeAngle(handArea, 0);
     handArea.removeAllChildren();
 
     const legal = new Set(legalDiscardTiles);
+    const canDiscard = legalDiscardTiles.length > 0;
     const sorted = [...view.self.hand].sort((a, b) => a - b);
-    const tileW = layout.w(3.15);
+    const tileW = layout.w(3.0);
     const tileH = tileW * 1.36;
-    const gap = tileW * 0.82;
+    const gap = tileW * 0.8;
     sorted.forEach((tile, index) => {
+      const isSelected = this.selectedHandIndex === index;
       const node = this.createTile(
         handArea,
         `SelfTile${index}`,
         tile,
-        new Vec3((index - (sorted.length - 1) / 2) * gap, this.selectedHandIndex === index ? tileH * 0.22 : 0, 0),
+        new Vec3((index - (sorted.length - 1) / 2) * gap, isSelected ? tileH * 0.22 : 0, 0),
         tileW,
         tileH,
       );
       node.active = true;
+      if (!canDiscard) return;
       node.on('touch-end', () => {
-        if (legal.size > 0 && !legal.has(tile)) return;
-        if (this.selectedHandIndex === index) {
+        if (!legal.has(tile)) return;
+        const now = Date.now();
+        const isQuickSecondTap = this.lastTapTile === tile && now - this.lastTapAt <= 650;
+        if (this.selectedHandIndex === index || isQuickSecondTap) {
           eventBus.emit(GameEvents.DISCARD_REQUESTED, tile);
           return;
         }
 
         this.selectedHandIndex = index;
+        this.lastTapTile = tile;
+        this.lastTapAt = now;
         this.createSelfHand(canvas, layout, view, legalDiscardTiles);
       });
     });
@@ -272,15 +299,15 @@ export class GameController extends BaseScene {
 
   private createActionPanel(canvas: Node, layout: RuntimeLayout, actions: GameAction[], submitting: boolean): void {
     const panel = ensureChild(canvas, 'ActionPanel');
-    panel.setPosition(layout.pos(35, -27));
+    panel.setPosition(layout.pos(31, -25));
     panel.removeAllChildren();
     const visibleActions = actions
-      .filter((action) => action.type !== 'DISCARD')
+      .filter((action) => action.type !== 'DISCARD' && action.type !== 'SELECT_KONG_TILE')
       .sort((a, b) => ACTION_ORDER.indexOf(a.type) - ACTION_ORDER.indexOf(b.type));
     panel.active = visibleActions.length > 0;
 
     visibleActions.forEach((action, index) => {
-      const width = action.type === 'WIN' ? layout.w(7) : action.type === 'SELECT_KONG_TILE' ? layout.w(8.4) : layout.w(6.2);
+      const width = action.type === 'WIN' ? layout.w(6.3) : action.type === 'SELECT_KONG_TILE' ? layout.w(7.5) : layout.w(5.6);
       const height = width / (action.type === 'WIN' ? 1.72 : action.type === 'SELECT_KONG_TILE' ? 2.24 : 1.68);
       createImageButton(
         panel,
@@ -297,11 +324,54 @@ export class GameController extends BaseScene {
     });
   }
 
+  private createKongTileChoice(canvas: Node, layout: RuntimeLayout, actions: GameAction[], submitting: boolean): void {
+    const choices = actions.filter((action) => action.type === 'SELECT_KONG_TILE' && action.tile !== undefined);
+    if (choices.length === 0) return;
+
+    const layer = ensureChild(canvas, 'KongTileChoice');
+    layer.setPosition(layout.pos(0, -18));
+    layer.removeAllChildren();
+
+    const panelWidth = layout.w(26);
+    const panelHeight = layout.h(16);
+    createPanel(layer, 'ChoiceBg', panelWidth, panelHeight, new Color(10, 58, 43, 238));
+    createPanel(layer, 'ChoiceGlow', panelWidth * 0.94, panelHeight * 0.86, new Color(255, 218, 82, 55));
+    this.createText(layer, 'ChoiceTitle', '选择杠后补牌', new Vec3(0, panelHeight * 0.32, 0), layout.s(1.85), new Color(255, 240, 168, 255));
+
+    choices.slice(0, 2).forEach((action, index) => {
+      const tile = action.tile as TileId;
+      const x = (index - (Math.min(choices.length, 2) - 1) / 2) * layout.w(7);
+      const tileNode = this.createTile(layer, `KongChoiceTile${index}`, tile, new Vec3(x, -panelHeight * 0.04, 0), layout.w(3.9), layout.w(5.3));
+      createPanel(layer, `KongChoiceHit${index}`, layout.w(5.4), layout.w(6.7), new Color(255, 255, 255, 1), new Vec3(x, -panelHeight * 0.04, 0)).on('touch-end', () => {
+        if (!submitting) eventBus.emit(GameEvents.ACTION_SELECTED, action);
+      });
+      this.createText(layer, `KongChoiceName${index}`, getTileLabel(tile), new Vec3(x, -panelHeight * 0.42, 0), layout.s(1.35), new Color(235, 248, 217, 255));
+      tileNode.active = true;
+    });
+  }
+
+  private createResponseHint(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
+    const responseTile = this.responseTile(view);
+    if (responseTile === null) return;
+
+    const hint = ensureChild(canvas, 'ResponseHint');
+    hint.setPosition(layout.pos(31, -16.5));
+    hint.removeAllChildren();
+
+    const panelWidth = layout.w(14);
+    const panelHeight = layout.h(10.5);
+    createPanel(hint, 'ResponseHintBg', panelWidth, panelHeight, new Color(14, 71, 50, 230));
+    createPanel(hint, 'ResponseHintGlow', panelWidth * 0.94, panelHeight * 0.86, new Color(255, 218, 82, 70));
+    this.createText(hint, 'ResponseHintTitle', '可响应', new Vec3(0, panelHeight * 0.27, 0), layout.s(1.65), new Color(255, 240, 168, 255));
+    this.createTile(hint, 'ResponseHintTile', responseTile, new Vec3(0, -panelHeight * 0.11, 0), layout.w(3.4), layout.w(4.65));
+    this.createText(hint, 'ResponseHintName', getTileLabel(responseTile), new Vec3(0, -panelHeight * 0.38, 0), layout.s(1.35), new Color(235, 248, 217, 255));
+  }
+
   private createResultDialog(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
     const layer = ensureChild(canvas, 'ResultDialogLayer');
     layer.removeAllChildren();
     createPanel(layer, 'Mask', layout.width, layout.height, new Color(0, 0, 0, 165));
-    const isFinal = this.isFinalRound();
+    const isFinal = this.isFinalResult(view);
     const dialogWidth = isFinal ? layout.w(62) : layout.w(56);
     const dialogHeight = isFinal ? layout.h(78) : layout.h(72);
     createPanel(layer, 'DialogFallback', dialogWidth, dialogHeight, new Color(9, 57, 43, 245));
@@ -317,7 +387,7 @@ export class GameController extends BaseScene {
       layout.s(3.6),
       new Color(255, 234, 164, 255),
     );
-    this.createText(layer, 'RoundText', `第 ${this.currentRound} / ${this.maxRoundCount()} 局`, layout.pos(0, 22.5), layout.s(2.0), new Color(218, 244, 205, 255));
+    this.createText(layer, 'RoundText', `第 ${view.currentRound ?? this.currentRound} / ${this.displayMaxRounds(view)} 局`, layout.pos(0, 22.5), layout.s(2.0), new Color(218, 244, 205, 255));
 
     this.createResultScores(layer, layout, view, result);
     this.createFanList(layer, layout, result);
@@ -369,7 +439,14 @@ export class GameController extends BaseScene {
   private async handleDiscard(tile: TileId): Promise<void> {
     if (this.resultVisible) return;
     this.selectedHandIndex = null;
-    await gameManager.submitDiscard(tile);
+    this.lastTapTile = null;
+    try {
+      await gameManager.submitDiscard(tile);
+    } catch (err) {
+      console.error('[GameController] discard failed', tile, err);
+      this.showNotice('出牌失败');
+      this.createSelfHand(ensureCanvas(this.node), createLayout(), gameManager.currentView || mockGameView, gameManager.getLegalDiscardTiles());
+    }
   }
 
   private handleActionSelected = (action: GameAction): void => {
@@ -387,20 +464,42 @@ export class GameController extends BaseScene {
     loadScene('Room');
   }
 
-  private continueGame(): void {
-    this.currentRound = Math.min(this.currentRound + 1, this.maxRoundCount());
+  private async continueGame(): Promise<void> {
+    this.currentRound = Math.min((gameManager.currentView?.currentRound ?? this.currentRound) + 1, this.maxRoundCount());
     this.resultVisible = false;
     this.selectedHandIndex = null;
-    gameManager.setView({
-      ...mockGameView,
-      stepIndex: mockGameView.stepIndex + this.currentRound,
-      gameId: roomManager.currentRoom?.gameId || mockGameView.gameId,
-      roomId: roomManager.currentRoom?.roomId || mockGameView.roomId,
-    });
+    this.lastTapTile = null;
+    try {
+      const gameId = await roomManager.startGame();
+      const room = roomManager.currentRoom;
+      const roomId = room?.roomId || gameManager.currentView?.roomId || mockGameView.roomId;
+      const subscribeRoomIds = [roomId, room?.internalRoomId].filter((id): id is string => Boolean(id));
+      await this.enterGame(roomId, gameId, subscribeRoomIds);
+    } catch (err) {
+      console.error('[GameController] continue game failed', err);
+      this.showNotice('继续游戏失败');
+    }
   }
 
   private isFinalRound(): boolean {
     return this.currentRound >= this.maxRoundCount();
+  }
+
+  private isFinalResult(view: PlayerGameView): boolean {
+    const currentRound = view.currentRound ?? this.currentRound;
+    const backendMaxRounds = this.displayMaxRounds(view);
+    return view.isFinalRound === true && currentRound >= backendMaxRounds;
+  }
+
+  private displayMaxRounds(view: PlayerGameView): number {
+    const configuredRounds = this.maxRoundCount();
+    return view.maxRounds && view.maxRounds > 1 ? view.maxRounds : configuredRounds;
+  }
+
+  private responseTile(view: PlayerGameView): TileId | null {
+    if (!view.lastDiscard) return null;
+    const hasResponseAction = view.legalActions.some((action) => RESPONSE_ACTION_TYPES.has(action.type));
+    return hasResponseAction ? view.lastDiscard.tile : null;
   }
 
   private maxRoundCount(): number {
@@ -413,6 +512,20 @@ export class GameController extends BaseScene {
     label.lineHeight = fontSize * 1.15;
     label.color = color;
     return label;
+  }
+
+  private displayRoomId(view: PlayerGameView): string {
+    const roomId = roomManager.currentRoom?.roomId || view.roomId;
+    return /^\d{6}$/.test(roomId) ? roomId : view.gameId.slice(-6).toUpperCase();
+  }
+
+  private showNotice(title: string): void {
+    const wxApi = (globalThis as { wx?: { showToast?: (options: { title: string; icon?: 'none'; duration?: number }) => void } }).wx;
+    if (wxApi?.showToast) {
+      wxApi.showToast({ title, icon: 'none', duration: 1600 });
+      return;
+    }
+    console.warn(`[GameController] ${title}`);
   }
 
   private playerNames(view: PlayerGameView): string[] {
@@ -432,34 +545,34 @@ export class GameController extends BaseScene {
   }
 
   private playerAreaConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
-    if (position === 'bottom') return { width: layout.w(23), height: layout.w(23) / PLAYER_PANEL_RATIO_SELF, position: layout.pos(-39, -31) };
-    if (position === 'right') return { width: layout.w(17), height: layout.w(17) / PLAYER_PANEL_RATIO_OTHER, position: layout.pos(43, 3) };
-    if (position === 'top') return { width: layout.w(17), height: layout.w(17) / PLAYER_PANEL_RATIO_OTHER, position: layout.pos(0, 33) };
-    return { width: layout.w(17), height: layout.w(17) / PLAYER_PANEL_RATIO_OTHER, position: layout.pos(-43, 3) };
+    if (position === 'bottom') return { width: layout.w(21), height: layout.w(21) / PLAYER_PANEL_RATIO_SELF, position: layout.pos(-34, -29) };
+    if (position === 'right') return { width: layout.w(14), height: layout.w(14) / PLAYER_PANEL_RATIO_OTHER, position: layout.pos(35, 2) };
+    if (position === 'top') return { width: layout.w(15), height: layout.w(15) / PLAYER_PANEL_RATIO_OTHER, position: layout.pos(0, 29) };
+    return { width: layout.w(14), height: layout.w(14) / PLAYER_PANEL_RATIO_OTHER, position: layout.pos(-35, 2) };
   }
 
   private discardAreaConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
-    const width = position === 'bottom' || position === 'top' ? layout.w(25) : layout.w(18);
-    const height = layout.h(12);
-    if (position === 'bottom') return { width, height, position: layout.pos(0, -17), tileW: layout.w(2.5), tileH: layout.w(3.35) };
-    if (position === 'right') return { width, height, position: layout.pos(24, 4), tileW: layout.w(2.25), tileH: layout.w(3.0) };
-    if (position === 'top') return { width, height, position: layout.pos(0, 17), tileW: layout.w(2.35), tileH: layout.w(3.15) };
-    return { width, height, position: layout.pos(-24, 4), tileW: layout.w(2.25), tileH: layout.w(3.0) };
+    const width = position === 'bottom' || position === 'top' ? layout.w(23) : layout.w(13);
+    const height = layout.h(10.5);
+    if (position === 'bottom') return { width, height, position: layout.pos(0, -15.5), tileW: layout.w(2.2), tileH: layout.w(3.0) };
+    if (position === 'right') return { width, height, position: layout.pos(22, 3), tileW: layout.w(1.8), tileH: layout.w(2.45) };
+    if (position === 'top') return { width, height, position: layout.pos(0, 15.5), tileW: layout.w(2.05), tileH: layout.w(2.8) };
+    return { width, height, position: layout.pos(-22, 3), tileW: layout.w(1.8), tileH: layout.w(2.45) };
   }
 
   private meldAreaConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
-    const width = position === 'bottom' ? layout.w(26) : layout.w(20);
-    const height = layout.h(6.5);
-    if (position === 'bottom') return { width, height, position: layout.pos(-21, -25), tileW: layout.w(2.6), tileH: layout.w(3.5) };
-    if (position === 'right') return { width, height, position: layout.pos(34, -14), tileW: layout.w(2.1), tileH: layout.w(2.85) };
-    if (position === 'top') return { width, height, position: layout.pos(-18, 25), tileW: layout.w(2.15), tileH: layout.w(2.9) };
-    return { width, height, position: layout.pos(-34, -14), tileW: layout.w(2.1), tileH: layout.w(2.85) };
+    const width = position === 'bottom' ? layout.w(24) : layout.w(15);
+    const height = layout.h(5.8);
+    if (position === 'bottom') return { width, height, position: layout.pos(-17, -23.5), tileW: layout.w(2.25), tileH: layout.w(3.05) };
+    if (position === 'right') return { width, height, position: layout.pos(30, -12), tileW: layout.w(1.8), tileH: layout.w(2.45) };
+    if (position === 'top') return { width, height, position: layout.pos(-15, 23), tileW: layout.w(1.85), tileH: layout.w(2.5) };
+    return { width, height, position: layout.pos(-30, -12), tileW: layout.w(1.8), tileH: layout.w(2.45) };
   }
 
   private opponentHandConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
-    if (position === 'right') return { position: layout.pos(37, 4), tileW: layout.w(1.8), tileH: layout.w(2.45), gap: layout.w(1.55) };
-    if (position === 'left') return { position: layout.pos(-37, 4), tileW: layout.w(1.8), tileH: layout.w(2.45), gap: layout.w(1.55) };
-    return { position: layout.pos(0, 25), tileW: layout.w(2.05), tileH: layout.w(2.75), gap: layout.w(1.68) };
+    if (position === 'right') return { position: layout.pos(32, 3), tileW: layout.w(1.35), tileH: layout.w(1.85), gap: layout.w(1.2) };
+    if (position === 'left') return { position: layout.pos(-32, 3), tileW: layout.w(1.35), tileH: layout.w(1.85), gap: layout.w(1.2) };
+    return { position: layout.pos(0, 23), tileW: layout.w(1.65), tileH: layout.w(2.25), gap: layout.w(1.32) };
   }
 
   private avatarPosition(width: number, height: number, position: LocalSeatPosition): Vec3 {
@@ -483,4 +596,11 @@ export class GameController extends BaseScene {
     const imageHeight = imageWidth / ratio;
     createImage(parent, name, path, imageWidth, imageHeight);
   }
+}
+
+function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (predicate(items[index])) return index;
+  }
+  return -1;
 }

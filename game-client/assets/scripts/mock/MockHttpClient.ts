@@ -16,6 +16,21 @@ function cloneRoom(room: RoomView): RoomView {
 
 export class MockHttpClient {
   private room = cloneRoom(mockRoom);
+  private rooms = new Map<string, RoomView>([
+    [
+      mockRoom.roomId,
+      {
+        ...cloneRoom(mockRoom),
+        ownerId: 'u_host',
+        seats: [
+          { seatIndex: 0, user: { id: 'u_host', nickname: '房主' }, isReady: true, isOwner: true },
+          { seatIndex: 1, isReady: false },
+          { seatIndex: 2, isReady: false },
+          { seatIndex: 3, isReady: false },
+        ],
+      },
+    ],
+  ]);
 
   async request<T>(path: string, method: 'GET' | 'POST' = 'GET', data?: unknown): Promise<T> {
     await Promise.resolve();
@@ -28,13 +43,55 @@ export class MockHttpClient {
     }
 
     if (path === ApiRoutes.rooms && method === 'POST') {
-      this.room = cloneRoom(mockRoom);
+      const roomId =
+        typeof data === 'object' && data !== null && 'roomId' in data
+          ? String((data as { roomId?: unknown }).roomId)
+          : mockRoom.roomId;
+      this.room = { ...cloneRoom(mockRoom), roomId };
+      this.rooms.set(roomId, cloneRoom(this.room));
       return { room: cloneRoom(this.room) } as T;
+    }
+
+    const previewMatch = path.match(/^\/rooms\/([^/]+)\/preview$/);
+    if (previewMatch && method === 'GET') {
+      const roomId = previewMatch[1] || '';
+      const room = this.rooms.get(roomId);
+      if (!room) {
+        return {
+          exists: false,
+          roomId,
+          canJoin: false,
+          message: 'Room not found.',
+        } as T;
+      }
+
+      const seatCount = room.seats.filter((seat) => seat.user).length;
+      return {
+        exists: true,
+        roomId,
+        status: room.status,
+        seatCount,
+        maxSeats: 4,
+        canJoin: room.status === 'WAITING' && seatCount < 4,
+        ownerNickname: room.seats.find((seat) => seat.isOwner)?.user?.nickname || '房主',
+        rules: room.rules,
+      } as T;
     }
 
     const joinMatch = path.match(/^\/rooms\/([^/]+)\/join$/);
     if (joinMatch && method === 'POST') {
-      this.room = { ...cloneRoom(mockRoom), roomId: joinMatch[1] || mockRoom.roomId };
+      const roomId = joinMatch[1] || mockRoom.roomId;
+      const existing = this.rooms.get(roomId) || { ...cloneRoom(mockRoom), roomId };
+      this.room = cloneRoom(existing);
+      this.room = {
+        ...this.room,
+        seats: this.room.seats.map((seat) =>
+          seat.seatIndex === 1 && !seat.user
+            ? { seatIndex: 1, user: { id: 'u_001', nickname: '游客' }, isReady: false, isOwner: false }
+            : seat,
+        ),
+      };
+      this.rooms.set(roomId, cloneRoom(this.room));
       return cloneRoom(this.room) as T;
     }
 
@@ -56,6 +113,7 @@ export class MockHttpClient {
             : seat,
         ),
       };
+      this.rooms.set(this.room.roomId, cloneRoom(this.room));
       return cloneRoom(this.room) as T;
     }
 

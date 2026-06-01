@@ -18,6 +18,8 @@ import {
 } from 'cc';
 
 type ComponentCtor<T> = new (...args: never[]) => T;
+const spriteFrameCache = new Map<string, SpriteFrame>();
+const spriteFramePending = new Map<string, Array<(frame: SpriteFrame | null, err?: Error) => void>>();
 
 export function ensureChild(parent: Node, name: string): Node {
   const existing = parent.children.find((child) => child.name === name);
@@ -208,27 +210,53 @@ function getViewportSize() {
 }
 
 function loadSpriteFrame(sprite: Sprite, path: string): void {
+  const cached = spriteFrameCache.get(path);
+  if (cached) {
+    sprite.spriteFrame = cached;
+    return;
+  }
+
+  const waiters = spriteFramePending.get(path);
+  if (waiters) {
+    waiters.push((frame) => {
+      if (frame) sprite.spriteFrame = frame;
+    });
+    return;
+  }
+
+  spriteFramePending.set(path, [
+    (frame) => {
+      if (frame) sprite.spriteFrame = frame;
+    },
+  ]);
+
+  const finish = (frame: SpriteFrame | null, err?: Error): void => {
+    if (frame) spriteFrameCache.set(path, frame);
+    const callbacks = spriteFramePending.get(path) || [];
+    spriteFramePending.delete(path);
+    callbacks.forEach((callback) => callback(frame, err));
+  };
+
   resources.load(`${path}/spriteFrame`, SpriteFrame, (err, spriteFrame) => {
     if (!err && spriteFrame) {
-      sprite.spriteFrame = spriteFrame;
-      console.log(`[RuntimeUi] loaded spriteFrame: ${path}/spriteFrame`);
+      finish(spriteFrame);
       return;
     }
     resources.load(`${path}/texture`, Texture2D, (textureErr, texture) => {
       if (!textureErr && texture) {
         const frame = new SpriteFrame() as SpriteFrame & { texture?: Texture2D };
         frame.texture = texture;
-        sprite.spriteFrame = frame;
-        console.log(`[RuntimeUi] loaded texture: ${path}/texture`);
+        finish(frame);
       } else {
         resources.load(path, Texture2D, (directTextureErr, directTexture) => {
           if (!directTextureErr && directTexture) {
             const frame = new SpriteFrame() as SpriteFrame & { texture?: Texture2D };
             frame.texture = directTexture;
-            sprite.spriteFrame = frame;
-            console.log(`[RuntimeUi] loaded texture: ${path}`);
+            finish(frame);
           } else {
-            console.warn(`[RuntimeUi] failed to load sprite: ${path}`, err || textureErr || directTextureErr);
+            const loadErr = err || textureErr || directTextureErr || undefined;
+            console.warn(`[RuntimeUi] failed to load sprite: ${path}`, loadErr);
+            finish(null, loadErr);
           }
         });
       }

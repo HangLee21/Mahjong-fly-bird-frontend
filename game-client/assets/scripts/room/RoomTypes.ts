@@ -12,10 +12,12 @@ export interface RoomSeat {
   isAI?: boolean;
   isReady: boolean;
   isOwner?: boolean;
+  status?: string;
+  occupied?: boolean;
 }
 
 export interface RoomRules {
-  preset: 'qujing-fei-xiao-ji-v1.5';
+  preset: 'qujing-fei-xiaoji-v1.5';
   roundCount: 8 | 16 | 24 | 32;
   allowChow: boolean;
   fanCap: number;
@@ -27,9 +29,22 @@ export interface RoomRules {
 
 export interface RoomView {
   roomId: string;
+  internalRoomId?: string;
   ownerId: string;
   status: RoomStatus;
   seats: RoomSeat[];
   rules: RoomRules;
   gameId?: string;
+}
+
+export interface RoomPreview {
+  exists: boolean;
+  roomId: string;
+  status?: RoomStatus;
+  seatCount?: number;
+  maxSeats?: number;
+  canJoin: boolean;
+  ownerNickname?: string;
+  rules?: Partial<RoomRules>;
+  message?: string;
 }

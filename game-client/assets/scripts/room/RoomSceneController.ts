@@ -73,11 +73,19 @@ export class RoomSceneController extends BaseScene {
   }
 
   private addAiToFirstEmptySeat(): void {
-    if (!this.isCurrentUserOwner()) return;
+    if (!this.isCurrentUserOwner()) {
+      console.warn('[RoomSceneController] only room owner can add AI');
+      this.showNotice('只有房主可以添加人机');
+      return;
+    }
     const room = this.ensureRoom();
     const emptySeat = room.seats.find((seat) => !seat.user);
-    if (!emptySeat) return;
-    roomManager.addLocalAi(emptySeat.seatIndex);
+    if (!emptySeat) {
+      console.warn('[RoomSceneController] no empty seat for AI');
+      this.showNotice('没有空座位');
+      return;
+    }
+    void this.addAi(emptySeat.seatIndex);
   }
 
   private startGame(): void {
@@ -97,7 +105,7 @@ export class RoomSceneController extends BaseScene {
   }
 
   private leaveRoom(): void {
-    roomManager.leaveLocalRoom();
+    void roomManager.leaveRoom();
     loadScene('RoomEntry');
   }
 
@@ -196,11 +204,12 @@ export class RoomSceneController extends BaseScene {
     if (seat.user) {
       const avatarSize = size * 0.44;
       const avatarPosition = new Vec3(0, size * 0.06, 0);
+      const avatarFallback = seat.isAI ? 'textures/ui/default_avatar' : 'textures/ui/avatar_placeholder';
       createRemoteImage(
         node,
         'Avatar',
         seat.user.avatarUrl || '',
-        'textures/ui/avatar_placeholder',
+        avatarFallback,
         avatarSize,
         avatarSize,
         avatarPosition,
@@ -233,9 +242,10 @@ export class RoomSceneController extends BaseScene {
     this.setChildContentSize(node, 'SeatStatus', size * 1.3, size * 0.22);
 
     if (!seat.user && canManage) {
-      const addAiButton = createButton(node, 'SeatAddAiButton', '+AI', () => roomManager.addLocalAi(seat.seatIndex), new Vec3(size * 0.36, size * 0.27, 0));
+      const addAiButton = createButton(node, 'SeatAddAiButton', '+AI', () => void this.addAi(seat.seatIndex), new Vec3(size * 0.36, size * 0.27, 0));
       this.sizeButton(addAiButton, size * 0.36, size * 0.22);
       this.tintButton(addAiButton, new Color(20, 112, 82, 235));
+      this.createClickHotspot(node, 'SeatAddAiHotspot', () => void this.addAi(seat.seatIndex), new Vec3(size * 0.36, size * 0.27, 0), size * 0.48, size * 0.32);
     }
 
     if (canSeatBeManaged) {
@@ -269,6 +279,7 @@ export class RoomSceneController extends BaseScene {
         addAiWidth,
         addAiWidth / BUTTON_ADD_AI_RATIO,
       );
+      this.createClickHotspot(canvas, 'ButtonAddAiHotspot', () => this.addAiToFirstEmptySeat(), layout.pos(-14, -25), addAiWidth, addAiWidth / BUTTON_ADD_AI_RATIO);
 
       const startWidth = layout.w(18);
       createImageButton(
@@ -419,6 +430,15 @@ export class RoomSceneController extends BaseScene {
     });
   }
 
+  private async addAi(seatIndex: number): Promise<void> {
+    try {
+      await roomManager.addAi(seatIndex);
+    } catch (err) {
+      console.error('[RoomSceneController] add AI failed', err);
+      this.showNotice('添加人机失败');
+    }
+  }
+
   private showSettingsDialog(visible: boolean): void {
     if (this.settingsLayer) this.settingsLayer.active = visible;
   }
@@ -443,7 +463,7 @@ export class RoomSceneController extends BaseScene {
       ownerId: user.id,
       status: 'WAITING',
       rules: {
-        preset: 'qujing-fei-xiao-ji-v1.5',
+        preset: 'qujing-fei-xiaoji-v1.5',
         roundCount: this.settings.roundCount,
         allowChow: this.settings.allowChow,
         fanCap: this.settings.fanCap,
@@ -478,6 +498,16 @@ export class RoomSceneController extends BaseScene {
 
   private currentUserId(): string {
     return authManager.user?.id || 'u_001';
+  }
+
+  private showNotice(title: string): void {
+    const wxApi = (globalThis as { wx?: { showToast?: (options: { title: string; icon?: 'none'; duration?: number }) => void } }).wx;
+    if (wxApi?.showToast) {
+      wxApi.showToast({ title, icon: 'none', duration: 1600 });
+      return;
+    }
+
+    console.warn(`[RoomSceneController] ${title}`);
   }
 
   private bindRoomEvents(): void {
@@ -522,6 +552,13 @@ export class RoomSceneController extends BaseScene {
   private tintButton(node: Node, color: Color): void {
     const sprite = node.getComponent(Sprite);
     if (sprite) sprite.color = color;
+  }
+
+  private createClickHotspot(parent: Node, name: string, onClick: () => void, position: Vec3, width: number, height: number): Node {
+    const hotspot = createPanel(parent, name, width, height, new Color(255, 255, 255, 1), position);
+    hotspot.off('touch-end', onClick);
+    hotspot.on('touch-end', onClick);
+    return hotspot;
   }
 
   private createImageByWidth(parent: Node, name: string, path: string, width: number, ratio: number, position = Vec3.ZERO): Node {

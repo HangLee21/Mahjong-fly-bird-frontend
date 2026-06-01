@@ -1,7 +1,10 @@
 import { _decorator, Color, Node, view } from 'cc';
 import { AppConfig } from '../app/AppConfig';
 import { loadScene } from '../app/SceneNavigator';
+import { authManager } from '../auth/AuthManager';
 import { BaseScene } from '../core/BaseScene';
+import { httpClient } from '../network/HttpClient';
+import { ApiRoutes } from '../network/ApiRoutes';
 import { createImage, createLayout, createPanel, ensureCanvas } from '../ui/RuntimeUi';
 import { Storage } from '../utils/Storage';
 
@@ -28,9 +31,29 @@ export class BootController extends BaseScene {
   async enter(): Promise<void> {
     await super.enter();
     this.buildRuntimeUi();
-    const nextScene = AppConfig.USE_MOCK_HTTP || Storage.getToken() ? 'Lobby' : 'Login';
+    const nextScene = await this.resolveNextScene();
     console.log(`[BootController] next scene: ${nextScene}`);
     setTimeout(() => loadScene(nextScene), 350);
+  }
+
+  private async resolveNextScene(): Promise<'Lobby' | 'Login'> {
+    if (AppConfig.USE_MOCK_HTTP) return 'Lobby';
+
+    try {
+      await httpClient.get(ApiRoutes.bootstrap);
+    } catch (err) {
+      console.warn('[BootController] bootstrap failed, continue with auth flow', err);
+    }
+
+    if (!Storage.getToken()) return 'Login';
+
+    try {
+      return (await authManager.restoreSession()) ? 'Lobby' : 'Login';
+    } catch (err) {
+      console.warn('[BootController] session restore failed', err);
+      Storage.clearSession();
+      return 'Login';
+    }
   }
 
   private buildRuntimeUi(): void {

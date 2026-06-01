@@ -10,6 +10,8 @@ export class MockWsClient {
   private listeners = new Map<string, Set<Handler>>();
   private status: WsStatus = 'IDLE';
   private roomId: string | null = null;
+  private view: PlayerGameView = cloneView(mockGameView);
+  private actionCount = 0;
 
   connect(): void {
     this.setStatus('CONNECTED');
@@ -22,6 +24,7 @@ export class MockWsClient {
   send<T>(message: WsMessage<T>): void {
     if (message.type === 'ROOM_SUBSCRIBE') {
       this.dispatch({ type: 'ROOM_UPDATE', roomId: this.roomId || mockRoom.roomId, payload: { room: mockRoom } });
+      this.dispatch({ type: 'GAME_VIEW', roomId: this.roomId || mockRoom.roomId, gameId: this.view.gameId, payload: { view: cloneView(this.view) } });
       return;
     }
 
@@ -42,7 +45,7 @@ export class MockWsClient {
         type: 'GAME_VIEW',
         roomId: message.roomId,
         gameId: message.gameId,
-        payload: { view: this.buildViewAfterAction(action) },
+        payload: { view: this.buildViewAfterAction(action, message.roomId, message.gameId) },
       });
     }
   }
@@ -73,52 +76,85 @@ export class MockWsClient {
     eventBus.emit(GameEvents.WS_STATUS_CHANGED, status);
   }
 
-  private buildViewAfterAction(action: GameAction | undefined): PlayerGameView {
-    if (!action) return mockGameView;
-    if (action.type === 'WIN') return mockFinishedGameView;
+  private buildViewAfterAction(action: GameAction | undefined, roomId?: string, gameId?: string): PlayerGameView {
+    if (!action) return cloneView(this.view);
+    this.actionCount += 1;
+    if (action.type === 'WIN') {
+      this.view = finishView(this.view, roomId, gameId);
+      return cloneView(this.view);
+    }
 
     if (action.type === 'DISCARD' && action.tile !== undefined) {
-      const nextHand = removeFirst(mockGameView.self.hand, action.tile);
-      return {
-        ...mockGameView,
-        stepIndex: mockGameView.stepIndex + 1,
+      const nextHand = removeFirst(this.view.self.hand, action.tile);
+      const stepIndex = this.view.stepIndex + 1;
+      const aiDiscard = nextAiDiscard(stepIndex);
+      const drawnTile = nextDrawTile(stepIndex);
+      this.view = {
+        ...this.view,
+        roomId: roomId || this.view.roomId,
+        gameId: gameId || this.view.gameId,
+        stepIndex,
         currentPlayer: 1,
         self: {
-          ...mockGameView.self,
+          ...this.view.self,
           hand: nextHand,
-          discards: [...mockGameView.self.discards, action.tile],
+          handCount: nextHand.length,
+          discards: [...this.view.self.discards, action.tile],
         },
-        lastDiscard: { tile: action.tile, fromPlayer: mockGameView.playerIndex },
-        legalActions: [{ type: 'PASS', actionId: 401 }],
+        opponents: advanceAiDiscards(this.view.opponents, aiDiscard),
+        lastDiscard: { tile: aiDiscard, fromPlayer: 1 },
+        wallTilesRemaining: Math.max(0, this.view.wallTilesRemaining - 2),
+        legalActions: this.nextSelfActions([...nextHand, drawnTile], stepIndex),
       };
+      this.view.self.hand = [...nextHand, drawnTile].sort((a, b) => a - b);
+      this.view.self.handCount = this.view.self.hand.length;
+      this.view.currentPlayer = 0;
+      return cloneView(this.view);
     }
 
     if (action.type.startsWith('KONG')) {
-      return {
-        ...mockGameView,
-        stepIndex: mockGameView.stepIndex + 1,
+      this.view = {
+        ...this.view,
+        stepIndex: this.view.stepIndex + 1,
         restrictions: ['杠后必须从公开杠牌选择一张补入手牌'],
-        legalActions: mockGameView.publicKongTiles.map((tile, index) => ({
+        legalActions: this.view.publicKongTiles.map((tile, index) => ({
           type: 'SELECT_KONG_TILE',
           tile,
           actionId: 500 + index,
         })),
       };
+      return cloneView(this.view);
     }
 
     if (action.type === 'SELECT_KONG_TILE' && action.tile !== undefined) {
-      return {
-        ...mockGameView,
-        stepIndex: mockGameView.stepIndex + 2,
+      const hand = [...this.view.self.hand, action.tile].sort((a, b) => a - b);
+      this.view = {
+        ...this.view,
+        stepIndex: this.view.stepIndex + 2,
+        restrictions: [],
         self: {
-          ...mockGameView.self,
-          hand: [...mockGameView.self.hand, action.tile],
+          ...this.view.self,
+          hand,
+          handCount: hand.length,
         },
-        publicKongTiles: replaceFirst(mockGameView.publicKongTiles, action.tile, 5),
+        publicKongTiles: replaceFirst(this.view.publicKongTiles, action.tile, 5),
+        legalActions: discardActions(hand, this.view.stepIndex + 2),
       };
+      return cloneView(this.view);
     }
 
-    return mockGameView;
+    this.view = {
+      ...this.view,
+      legalActions: discardActions(this.view.self.hand, this.view.stepIndex),
+    };
+    return cloneView(this.view);
+  }
+
+  private nextSelfActions(hand: TileId[], stepIndex: number): GameAction[] {
+    if (this.actionCount >= 4) return [{ type: 'WIN', tile: hand[hand.length - 1], actionId: 101 }, { type: 'PASS', actionId: 100 }];
+    const actions = discardActions(hand, stepIndex);
+    if (this.actionCount === 2) actions.push({ type: 'PONG', tile: 21, actionId: 102 }, { type: 'PASS', actionId: 100 });
+    return actions;
   }
 }
 
@@ -134,4 +170,45 @@ function replaceFirst(tiles: TileId[], from: TileId, to: TileId): TileId[] {
   const index = next.indexOf(from);
   if (index >= 0) next[index] = to;
   return next;
+}
+
+function discardActions(hand: TileId[], stepIndex: number): GameAction[] {
+  return [...new Set(hand)].map((tile, index) => ({ type: 'DISCARD', tile, actionId: tile, extra: { mockStep: stepIndex, order: index } }));
+}
+
+function nextDrawTile(stepIndex: number): TileId {
+  return [5, 10, 18, 24, 31][stepIndex % 5];
+}
+
+function nextAiDiscard(stepIndex: number): TileId {
+  return [11, 19, 27, 2, 15, 29][stepIndex % 6];
+}
+
+function advanceAiDiscards(players: PlayerGameView['opponents'], tile: TileId): PlayerGameView['opponents'] {
+  return players.map((player) =>
+    player.seatIndex === 1
+      ? { ...player, discards: [...player.discards, tile], handCount: Math.max(0, player.handCount - 1) }
+      : player,
+  );
+}
+
+function finishView(view: PlayerGameView, roomId?: string, gameId?: string): PlayerGameView {
+  return {
+    ...cloneView(mockFinishedGameView),
+    roomId: roomId || view.roomId,
+    gameId: gameId || view.gameId,
+    stepIndex: view.stepIndex + 1,
+    self: { ...view.self, legalActions: [], status: 'WIN' },
+    opponents: view.opponents,
+    legalActions: [],
+    result: {
+      ...mockFinishedGameView.result!,
+      winnerIndexes: [view.playerIndex],
+      loserIndexes: [1, 2, 3],
+    },
+  };
+}
+
+function cloneView(view: PlayerGameView): PlayerGameView {
+  return JSON.parse(JSON.stringify(view)) as PlayerGameView;
 }

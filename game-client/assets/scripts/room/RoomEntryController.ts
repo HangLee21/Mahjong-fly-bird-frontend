@@ -39,6 +39,7 @@ export class RoomEntryController extends BaseScene {
   private codeDigitNodes: Node[] = [];
   private codeDigitHeight = 72;
   private codeDigitWidth = 40;
+  private submitting = false;
 
   async start(): Promise<void> {
     console.log('[RoomEntryController] start');
@@ -173,15 +174,78 @@ export class RoomEntryController extends BaseScene {
   }
 
   private async createRoom(): Promise<void> {
-    await roomManager.createRoom();
-    loadScene('Room');
+    if (this.submitting) return;
+    if (!this.isCompleteRoomCode()) {
+      this.showNotice('请输入 6 位房间号');
+      this.openRoomCodeKeyboard();
+      return;
+    }
+
+    this.submitting = true;
+    try {
+      const preview = await roomManager.previewRoom(this.roomCode);
+      if (preview.exists) {
+        this.showNotice('该房间号已存在');
+        return;
+      }
+
+      await roomManager.createRoom(this.roomCode);
+      loadScene('Room');
+    } catch (err) {
+      console.error('[RoomEntryController] create room failed', err);
+      this.showNotice('创建房间失败');
+    } finally {
+      this.submitting = false;
+    }
   }
 
   private async joinRoom(): Promise<void> {
-    if (this.roomCode.length === 0) return;
-    await roomManager.joinRoom(this.roomCode);
-    loadScene('Room');
+    if (this.submitting) return;
+    if (!this.isCompleteRoomCode()) {
+      this.showNotice('请输入 6 位房间号');
+      this.openRoomCodeKeyboard();
+      return;
+    }
+
+    this.submitting = true;
+    try {
+      const preview = await roomManager.previewRoom(this.roomCode);
+      if (!preview.exists) {
+        this.showNotice('房间号不存在');
+        return;
+      }
+      if (!preview.canJoin) {
+        this.showNotice(preview.message || '该房间不可加入');
+        return;
+      }
+
+      await roomManager.joinRoom(this.roomCode);
+      loadScene('Room');
+    } catch (err) {
+      console.error('[RoomEntryController] join room failed', err);
+      this.showNotice('加入房间失败');
+    } finally {
+      this.submitting = false;
+    }
   }
+
+  private isCompleteRoomCode(): boolean {
+    return /^\d{6}$/.test(this.roomCode);
+  }
+
+  private showNotice(title: string): void {
+    const wxApi = (globalThis as { wx?: WechatToastApi }).wx;
+    if (wxApi?.showToast) {
+      wxApi.showToast({ title, icon: 'none', duration: 1600 });
+      return;
+    }
+
+    console.warn(`[RoomEntryController] ${title}`);
+  }
+}
+
+interface WechatToastApi {
+  showToast(options: { title: string; icon?: 'none' | 'success' | 'loading' | 'error'; duration?: number }): void;
 }
 
 interface WechatKeyboardApi {
