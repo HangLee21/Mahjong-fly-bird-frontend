@@ -12,6 +12,7 @@ import {
   Sprite,
   SpriteFrame,
   Texture2D,
+  tween,
   UITransform,
   Vec3,
   view,
@@ -20,6 +21,25 @@ import {
 type ComponentCtor<T> = new (...args: never[]) => T;
 const spriteFrameCache = new Map<string, SpriteFrame>();
 const spriteFramePending = new Map<string, Array<(frame: SpriteFrame | null, err?: Error) => void>>();
+const remoteSpriteFrameCache = new Map<string, SpriteFrame>();
+const remoteSpriteFramePending = new Map<string, Array<(frame: SpriteFrame | null) => void>>();
+const spriteFrameRequests = new WeakMap<Sprite, string>();
+const touchEndHandlers = new WeakMap<Node, () => void>();
+const pressFeedbackHandlers = new WeakMap<Node, { start: () => void; end: () => void }>();
+// The WeChat simulator can report an unset design size during its first frame.
+export const DEFAULT_DESIGN_RESOLUTION: RuntimeSize = { width: 1334, height: 750 };
+const RESOLUTION_POLICY_SHOW_ALL = 2;
+
+export function applyLandscapeResolution(): void {
+  const runtimeView = view as unknown as {
+    setDesignResolutionSize?: (width: number, height: number, policy: number) => void;
+  };
+  runtimeView.setDesignResolutionSize?.(
+    DEFAULT_DESIGN_RESOLUTION.width,
+    DEFAULT_DESIGN_RESOLUTION.height,
+    RESOLUTION_POLICY_SHOW_ALL,
+  );
+}
 
 export function ensureChild(parent: Node, name: string): Node {
   const existing = parent.children.find((child) => child.name === name);
@@ -121,22 +141,50 @@ export function createRemoteImage(parent: Node, name: string, url: string, fallb
   const node = createImage(parent, name, fallbackPath, width, height, position);
   const sprite = ensureComponent(node, Sprite);
   if (!url) return node;
+  const requestKey = `remote:${url}`;
+  spriteFrameRequests.set(sprite, requestKey);
+
+  const applyFrame = (frame: SpriteFrame | null): void => {
+    if (spriteFrameRequests.get(sprite) !== requestKey) return;
+    if (frame) {
+      sprite.spriteFrame = frame;
+    } else {
+      loadSpriteFrame(sprite, fallbackPath);
+    }
+  };
+
+  const cached = remoteSpriteFrameCache.get(url);
+  if (cached) {
+    applyFrame(cached);
+    return node;
+  }
+
+  const pending = remoteSpriteFramePending.get(url);
+  if (pending) {
+    pending.push(applyFrame);
+    return node;
+  }
+  remoteSpriteFramePending.set(url, [applyFrame]);
 
   const remoteLoader = assetManager as {
     loadRemote<T>(remoteUrl: string, callback: (err: Error | null, asset: T | null) => void): void;
   };
 
   remoteLoader.loadRemote<unknown>(url, (err, imageAsset) => {
+    let frame: SpriteFrame | null = null;
     if (err || !imageAsset) {
       console.warn(`[RuntimeUi] failed to load remote image: ${url}`, err);
-      return;
+    } else {
+      const texture = new Texture2D();
+      (texture as Texture2D & { image?: unknown }).image = imageAsset;
+      frame = new SpriteFrame();
+      frame.texture = texture;
+      remoteSpriteFrameCache.set(url, frame);
     }
 
-    const texture = new Texture2D();
-    (texture as Texture2D & { image?: unknown }).image = imageAsset;
-    const frame = new SpriteFrame();
-    frame.texture = texture;
-    sprite.spriteFrame = frame;
+    const callbacks = remoteSpriteFramePending.get(url) || [];
+    remoteSpriteFramePending.delete(url);
+    callbacks.forEach((callback) => callback(frame));
   });
 
   return node;
@@ -151,14 +199,41 @@ export function createButton(parent: Node, name: string, text: string, onClick: 
   sprite.sizeMode = Sprite.SizeMode.CUSTOM;
   sprite.color = new Color(36, 142, 109, 255);
   ensureComponent(node, Button);
-  node.off('touch-end', onClick);
-  node.on('touch-end', onClick);
+  bindTouchEnd(node, onClick);
   const label = createLabel(node, 'Label', text, new Vec3(0, 0, 0));
   (label as Label & { fontSize?: number; lineHeight?: number }).fontSize = 24;
   (label as Label & { fontSize?: number; lineHeight?: number }).lineHeight = 30;
   const button = ensureComponent(node, Button) as Button & { clickEvents?: unknown[] };
   if ('clickEvents' in button) button.clickEvents = [];
   return node;
+}
+
+export function bindTouchEnd(node: Node, onClick: () => void): void {
+  const previous = touchEndHandlers.get(node);
+  if (previous) node.off('touch-end', previous);
+  touchEndHandlers.set(node, onClick);
+  node.on('touch-end', onClick);
+  bindPressFeedback(node);
+}
+
+function bindPressFeedback(node: Node): void {
+  const previous = pressFeedbackHandlers.get(node);
+  if (previous) {
+    node.off('touch-start', previous.start);
+    node.off('touch-end', previous.end);
+    node.off('touch-cancel', previous.end);
+  }
+
+  const start = (): void => {
+    node.setScale(0.96, 0.96, 1);
+  };
+  const end = (): void => {
+    tween(node).to(0.1, { scale: new Vec3(1, 1, 1) }, { easing: 'quadOut' }).start();
+  };
+  pressFeedbackHandlers.set(node, { start, end });
+  node.on('touch-start', start);
+  node.on('touch-end', end);
+  node.on('touch-cancel', end);
 }
 
 export function createImageButton(
@@ -191,7 +266,6 @@ function nextAutoPosition(parent: Node): Vec3 {
 }
 
 function getViewportSize() {
-  const visible = view.getVisibleSize();
   const design = view.getDesignResolutionSize();
   const designWidth = design.width || 0;
   const designHeight = design.height || 0;
@@ -203,32 +277,30 @@ function getViewportSize() {
     };
   }
 
-  return {
-    width: visible.width || design.width || 750,
-    height: visible.height || design.height || 1334,
-  };
+  return DEFAULT_DESIGN_RESOLUTION;
 }
 
 function loadSpriteFrame(sprite: Sprite, path: string): void {
+  const requestKey = `local:${path}`;
+  spriteFrameRequests.set(sprite, requestKey);
+  const applyFrame = (frame: SpriteFrame | null): void => {
+    if (frame && spriteFrameRequests.get(sprite) === requestKey) {
+      sprite.spriteFrame = frame;
+    }
+  };
   const cached = spriteFrameCache.get(path);
   if (cached) {
-    sprite.spriteFrame = cached;
+    applyFrame(cached);
     return;
   }
 
   const waiters = spriteFramePending.get(path);
   if (waiters) {
-    waiters.push((frame) => {
-      if (frame) sprite.spriteFrame = frame;
-    });
+    waiters.push(applyFrame);
     return;
   }
 
-  spriteFramePending.set(path, [
-    (frame) => {
-      if (frame) sprite.spriteFrame = frame;
-    },
-  ]);
+  spriteFramePending.set(path, [applyFrame]);
 
   const finish = (frame: SpriteFrame | null, err?: Error): void => {
     if (frame) spriteFrameCache.set(path, frame);

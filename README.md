@@ -18,7 +18,8 @@ frontend/
   Legacy 小程序页面实现
 ```
 
-麻将牌桌、动画、音效、拖拽、出牌等游戏体验后续以 `game-client/` 为准。
+麻将牌桌、动画、音效、选牌出牌、吃碰杠和结算等游戏体验以
+`game-client/` 为准。
 
 ## game-client 验证
 
@@ -29,4 +30,6 @@ npm run typecheck
 npm test
 ```
 
-用 Cocos Creator 3.x 打开 `game-client/`，构建目标选择“微信小游戏”。
+用 Cocos Creator 3.8.8 打开 `game-client/`，从 `Boot.scene` 运行，
+构建目标选择“微信小游戏”。详细状态和资源授权见
+[`game-client/README.md`](game-client/README.md)。

@@ -11,8 +11,11 @@ declare module 'cc' {
     layer: number;
     name: string;
     children: Node[];
+    parent: Node | null;
     position: Vec3;
+    scale: Vec3;
     setPosition(x: number | Vec3, y?: number, z?: number): void;
+    setScale(x: number | Vec3, y?: number, z?: number): void;
     addChild(node: Node): void;
     removeAllChildren(): void;
     addComponent<T>(ctor: new (...args: never[]) => T): T;
@@ -41,7 +44,17 @@ declare module 'cc' {
   export class Canvas { cameraComponent: Camera | null; }
   export class Prefab {}
   export class AudioClip {}
-  export class AudioSource { clip: AudioClip | null; volume: number; playOneShot(clip: AudioClip, volume?: number): void; }
+  export class AudioSource {
+    clip: AudioClip | null;
+    loop: boolean;
+    playOnAwake: boolean;
+    playing: boolean;
+    volume: number;
+    play(): void;
+    pause(): void;
+    stop(): void;
+    playOneShot(clip: AudioClip, volume?: number): void;
+  }
   export class Vec3 { constructor(x?: number, y?: number, z?: number); x: number; y: number; z: number; static ZERO: Vec3; }
   export class Size { constructor(width?: number, height?: number); width: number; height: number; }
   export class UITransform { width: number; height: number; setContentSize(width: number, height: number): void; }
@@ -53,14 +66,39 @@ declare module 'cc' {
   };
   export function instantiate(prefab: Prefab): Node;
   export interface TweenLike {
+    set(props: Record<string, unknown>): TweenLike;
     to(duration: number, props: Record<string, unknown>, opts?: Record<string, unknown>): TweenLike;
+    by(duration: number, props: Record<string, unknown>, opts?: Record<string, unknown>): TweenLike;
     call(fn: () => void): TweenLike;
+    repeatForever(action?: TweenLike): TweenLike;
     start(): TweenLike;
+    stop(): TweenLike;
   }
   export const tween: (target: unknown) => TweenLike;
   export const resources: { load<T>(path: string, type: new (...args: never[]) => T, cb: (err: Error | null, asset: T) => void): void };
   export const assetManager: unknown;
-  export const director: { loadScene(name: string, onLaunched?: () => void): void };
+  export class Game {
+    static EVENT_HIDE: string;
+    static EVENT_SHOW: string;
+  }
+  export class Input {
+    static EventType: {
+      TOUCH_START: string;
+      MOUSE_DOWN: string;
+    };
+  }
+  export const game: {
+    on(type: string, callback: (...args: never[]) => void, target?: unknown): void;
+    off(type: string, callback: (...args: never[]) => void, target?: unknown): void;
+  };
+  export const input: {
+    on(type: string, callback: (...args: never[]) => void, target?: unknown): void;
+    off(type: string, callback: (...args: never[]) => void, target?: unknown): void;
+  };
+  export const director: {
+    loadScene(name: string, onLaunched?: () => void): void;
+    addPersistRootNode(node: Node): void;
+  };
   export const view: View;
   export const sys: { localStorage: { getItem(key: string): string | null; setItem(key: string, value: string): void; removeItem(key: string): void } };
   export const Layers: { Enum: { UI_2D: number } };

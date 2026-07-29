@@ -1,12 +1,13 @@
-import { _decorator, Color, Node, view } from 'cc';
+import { _decorator, Color, Node } from 'cc';
 import { AppConfig } from '../app/AppConfig';
 import { loadScene } from '../app/SceneNavigator';
 import { authManager } from '../auth/AuthManager';
 import { BaseScene } from '../core/BaseScene';
 import { httpClient } from '../network/HttpClient';
 import { ApiRoutes } from '../network/ApiRoutes';
-import { createImage, createLayout, createPanel, ensureCanvas } from '../ui/RuntimeUi';
+import { applyLandscapeResolution, createImage, createLayout, createPanel, ensureCanvas } from '../ui/RuntimeUi';
 import { Storage } from '../utils/Storage';
+import { bgmManager } from '../audio/BgmManager';
 
 const { ccclass } = _decorator;
 
@@ -14,9 +15,6 @@ interface WechatOrientationApi {
   setDeviceOrientation?(options: { value: 'landscape' }): void;
 }
 
-const LANDSCAPE_DESIGN_WIDTH = 1334;
-const LANDSCAPE_DESIGN_HEIGHT = 750;
-const LANDSCAPE_RESOLUTION_POLICY_FIXED_WIDTH = 4;
 const BOOT_BG_RATIO = 1672 / 940;
 const BOOT_LOGO_RATIO = 1536 / 1024;
 
@@ -25,6 +23,7 @@ export class BootController extends BaseScene {
   async start(): Promise<void> {
     console.log('[BootController] start');
     this.applyLandscapeMode();
+    bgmManager.initialize(this.node);
     await this.enter();
   }
 
@@ -79,15 +78,7 @@ export class BootController extends BaseScene {
   private applyLandscapeMode(): void {
     const wxApi = (globalThis as { wx?: WechatOrientationApi }).wx;
     wxApi?.setDeviceOrientation?.({ value: 'landscape' });
-
-    const runtimeView = view as unknown as {
-      setDesignResolutionSize?: (width: number, height: number, policy: number) => void;
-    };
-    runtimeView.setDesignResolutionSize?.(
-      LANDSCAPE_DESIGN_WIDTH,
-      LANDSCAPE_DESIGN_HEIGHT,
-      LANDSCAPE_RESOLUTION_POLICY_FIXED_WIDTH,
-    );
+    applyLandscapeResolution();
   }
 
   private createCoverImage(parent: Node, name: string, path: string, width: number, height: number, ratio: number): void {

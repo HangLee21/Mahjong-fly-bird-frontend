@@ -1,11 +1,14 @@
-import { _decorator, Color, Label, Node, UITransform, Vec3 } from 'cc';
+import { _decorator, Color, Label, Node, Sprite, tween, UITransform, Vec3 } from 'cc';
 import { loadScene } from '../app/SceneNavigator';
 import { GameEvents } from '../app/GameEvents';
 import { BaseScene } from '../core/BaseScene';
 import { eventBus } from '../core/EventBus';
 import { mockGameView } from '../mock/MockData';
 import { roomManager } from '../room/RoomManager';
+import { gameAudio } from '../audio/GameAudio';
 import {
+  applyLandscapeResolution,
+  bindTouchEnd,
   createImage,
   createImageButton,
   createLabel,
@@ -19,7 +22,8 @@ import {
 } from '../ui/RuntimeUi';
 import { getTileTexturePath, TILE_BACK_TEXTURE } from '../assets/TileAssetMap';
 import { getTileLabel } from '../utils/TileUtils';
-import { gameManager } from './GameManager';
+import { getActionPreviewTiles } from './GameActionBuilder';
+import { gameManager, getDisplayedScores } from './GameManager';
 import type { ActionType, GameAction, LocalSeatPosition, PlayerGameView, PlayerPublicView, ScoreResult, TileId } from './GameTypes';
 
 const { ccclass } = _decorator;
@@ -59,33 +63,66 @@ const RESPONSE_ACTION_TYPES = new Set<ActionType>([
   'CHOW_RIGHT',
 ]);
 
+const MELD_ACTION_TYPES = new Set<ActionType>([
+  'PONG',
+  'CHOW_LEFT',
+  'CHOW_MIDDLE',
+  'CHOW_RIGHT',
+  'KONG_EXPOSED',
+  'KONG_CONCEALED',
+  'KONG_ADDED',
+]);
+
 const GAME_BG_RATIO = 1672 / 941;
-const PLAYER_PANEL_RATIO_SELF = 560 / 170;
-const PLAYER_PANEL_RATIO_OTHER = 460 / 150;
+const PLAYER_PANEL_RATIO_SELF = 330 / 110;
+const PLAYER_PANEL_RATIO_OTHER = 260 / 96;
 const CENTER_STATUS_RATIO = 360 / 180;
+const DISCARD_AREA_RATIO = 360 / 140;
+const MELD_AREA_RATIO = 380 / 80;
 
 @ccclass('GameController')
 export class GameController extends BaseScene {
   private resultVisible = false;
   private selectedHandIndex: number | null = null;
   private lastTapTile: TileId | null = null;
-  private lastTapAt = 0;
   private currentRound = 1;
+  private readonly handTouchHandlers = new Map<Node, () => void>();
+  private readonly seatByPosition = new Map<LocalSeatPosition, number>();
+  private readonly discardCounts = new Map<LocalSeatPosition, number>();
+  private readonly meldTileCounts = new Map<LocalSeatPosition, number>();
+  private readonly openingAnimationTimers: Array<ReturnType<typeof setTimeout>> = [];
+  private turnPulseVisible = true;
+  private lastCurrentPlayer: number | null = null;
+  private lastAudioRoundKey = '';
+  private lastAudioStatus = '';
+  private openingAnimationToken = 0;
+  private meldChoiceSignature = '';
+  private kongChoiceSignature = '';
+  private winPromptSignature = '';
 
   async start(): Promise<void> {
     console.log('[GameController] start');
+    applyLandscapeResolution();
+    gameAudio.attach(this.node);
     await this.enter();
     const room = roomManager.currentRoom;
     const roomId = room?.roomId || mockGameView.roomId;
     const gameId = room?.gameId || mockGameView.gameId;
     const subscribeRoomIds = [roomId, room?.internalRoomId].filter((id): id is string => Boolean(id));
     await this.enterGame(roomId, gameId, subscribeRoomIds);
+    this.unschedule?.(this.updateTurnPulse);
+    this.schedule?.(this.updateTurnPulse, 0.45);
   }
 
   onDestroy(): void {
     eventBus.off(GameEvents.GAME_VIEW_CHANGED, this.render, this);
     eventBus.off(GameEvents.DISCARD_REQUESTED, this.handleDiscard, this);
     eventBus.off(GameEvents.ACTION_SELECTED, this.handleActionSelected, this);
+    this.unschedule?.(this.updateTurnPulse);
+    this.handTouchHandlers.forEach((handler, node) => node.off('touch-end', handler));
+    this.handTouchHandlers.clear();
+    this.clearOpeningAnimationTimers();
+    gameAudio.detach();
   }
 
   async enterGame(roomId: string, gameId: string, subscribeRoomIds: string[] = [roomId]): Promise<void> {
@@ -107,26 +144,48 @@ export class GameController extends BaseScene {
     const snapshot = gameManager.snapshot();
     const view = snapshot.view;
     if (!view) return;
+    const displayedCurrentPlayer = snapshot.presentationAiSeat ?? view.currentPlayer;
+    if (displayedCurrentPlayer !== this.lastCurrentPlayer) {
+      this.lastCurrentPlayer = displayedCurrentPlayer;
+      this.turnPulseVisible = true;
+    }
+    const audioRoundKey = `${view.gameId}:${view.currentRound ?? this.currentRound}`;
+    let playRoundOpening = false;
+    if (view.status === 'PLAYING' && audioRoundKey !== this.lastAudioRoundKey) {
+      const continuingFromPreviousRound = this.lastAudioRoundKey.length > 0;
+      this.lastAudioRoundKey = audioRoundKey;
+      playRoundOpening = continuingFromPreviousRound || view.stepIndex <= 4;
+    }
+    if (
+      view.status === 'FINISHED'
+      && this.lastAudioStatus !== 'FINISHED'
+      && Boolean(view.result?.winnerIndexes.includes(view.playerIndex))
+    ) {
+      gameAudio.play('win', 0.7);
+    }
+    this.lastAudioStatus = view.status;
 
-    let canvas = ensureCanvas(this.node);
-    canvas.removeAllChildren();
-    canvas = ensureCanvas(this.node);
+    const canvas = ensureCanvas(this.node);
 
     const layout = createLayout();
     this.createBackground(canvas, layout);
     this.createTopHud(canvas, layout, view);
-    this.createCenterStatus(canvas, layout, view);
-    this.createPlayers(canvas, layout, view);
-    this.createSelfHand(canvas, layout, view, snapshot.legalDiscardTiles);
-    this.createActionPanel(canvas, layout, view.legalActions, snapshot.submitting);
+    this.createCenterStatus(canvas, layout, view, displayedCurrentPlayer);
+    this.createPlayers(canvas, layout, view, displayedCurrentPlayer, snapshot.presentationAiSeat);
+    this.createSelfHand(canvas, layout, view, snapshot.submitting ? [] : snapshot.legalDiscardTiles);
+    this.createActionPanel(canvas, layout, view, snapshot.submitting);
+    this.createMeldActionChoices(canvas, layout, view.legalActions, snapshot.submitting);
     this.createKongTileChoice(canvas, layout, view.legalActions, snapshot.submitting);
     this.createResponseHint(canvas, layout, view);
+    if (playRoundOpening) this.playRoundOpeningAnimation(canvas, layout, view);
 
     if (view.status === 'FINISHED' || view.status === 'DRAW') {
       this.resultVisible = true;
       this.createResultDialog(canvas, layout, view);
     } else {
       this.resultVisible = false;
+      const resultLayer = canvas.children.find((child) => child.name === 'ResultDialogLayer');
+      if (resultLayer) resultLayer.active = false;
     }
   };
 
@@ -143,30 +202,48 @@ export class GameController extends BaseScene {
     this.createText(
       canvas,
       'TopHudText',
-      `房间 ${this.displayRoomId(view)}    剩余 ${view.wallTilesRemaining} 张    第 ${view.stepIndex} 手`,
+      `房间 ${this.displayRoomId(view)}  ·  余 ${view.wallTilesRemaining} 张  ·  第 ${view.stepIndex} 手`,
       layout.pos(0, 37),
-      layout.s(1.8),
+      layout.s(1.65),
       new Color(235, 248, 217, 255),
     );
   }
 
-  private createCenterStatus(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
+  private createCenterStatus(
+    canvas: Node,
+    layout: RuntimeLayout,
+    view: PlayerGameView,
+    displayedCurrentPlayer: number,
+  ): void {
     const centerWidth = layout.w(15);
     createImage(canvas, 'CenterStatusPanel', 'textures/ui/center_status_panel', centerWidth, centerWidth / CENTER_STATUS_RATIO, layout.pos(0, 2));
-    const lastDiscard = view.lastDiscard ? `${getTileLabel(view.lastDiscard.tile)} / ${view.lastDiscard.fromPlayer}号位` : '无';
-    this.createText(canvas, 'CurrentPlayerText', `当前 ${view.currentPlayer}号`, layout.pos(0, 5.1), layout.s(1.55), new Color(255, 238, 168, 255));
-    this.createText(canvas, 'DealerText', `庄 ${view.dealer}号`, layout.pos(0, 2), layout.s(1.4));
-    this.createText(canvas, 'LastDiscardText', `上张 ${lastDiscard}`, layout.pos(0, -1.1), layout.s(1.25));
+    this.createText(canvas, 'CurrentPlayerText', `第 ${displayedCurrentPlayer + 1} 位`, layout.pos(0, 4.1), layout.s(2.05), new Color(255, 238, 168, 255));
+    this.createText(canvas, 'DealerText', `庄 ${view.dealer + 1}`, layout.pos(0, 1.2), layout.s(1.55), new Color(224, 243, 206, 255));
+    const lastDiscardText = canvas.children.find((child) => child.name === 'LastDiscardText');
+    if (lastDiscardText) lastDiscardText.active = false;
 
     const kongWidth = layout.w(16);
     createImage(canvas, 'PublicKongPanel', 'textures/ui/public_kong_panel', kongWidth, kongWidth / 3.1, layout.pos(0, -9.5));
-    this.createText(canvas, 'XiaoJiText', view.xiaoJiActiveAsWild ? '小鸡万能' : '小鸡关闭', layout.pos(0, -12), layout.s(1.3));
-    view.publicKongTiles.slice(0, 4).forEach((tile, index) => {
-      this.createTile(canvas, `PublicKongTile${index}`, tile, layout.pos(-4 + index * 2.7, -8.4), layout.w(2.05), layout.w(2.8));
-    });
+    this.createText(canvas, 'PublicKongTitle', '杠牌', layout.pos(0, -12.15), layout.s(1.55), new Color(255, 232, 151, 255));
+    const xiaoJiText = canvas.children.find((child) => child.name === 'XiaoJiText');
+    if (xiaoJiText) xiaoJiText.active = false;
+    for (let index = 0; index < 4; index += 1) {
+      const tile = view.publicKongTiles[index];
+      const node = ensureChild(canvas, `PublicKongTile${index}`);
+      node.active = tile !== undefined;
+      if (tile !== undefined) {
+        this.createTile(canvas, `PublicKongTile${index}`, tile, layout.pos(-2.8 + index * 2.55, -8.8), layout.w(2.05), layout.w(2.8));
+      }
+    }
   }
 
-  private createPlayers(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
+  private createPlayers(
+    canvas: Node,
+    layout: RuntimeLayout,
+    view: PlayerGameView,
+    displayedCurrentPlayer: number,
+    thinkingSeat: number | null,
+  ): void {
     const selfPlayer: PlayerPublicView = {
       seatIndex: view.playerIndex,
       handCount: view.self.hand.length,
@@ -176,36 +253,60 @@ export class GameController extends BaseScene {
       nickname: '我',
     };
 
-    this.createPlayerArea(canvas, layout, view, selfPlayer, 'bottom');
+    this.createPlayerArea(canvas, layout, view, selfPlayer, 'bottom', displayedCurrentPlayer, thinkingSeat);
     view.opponents.forEach((player) => {
-      this.createPlayerArea(canvas, layout, view, player, this.positionForOpponent(view.playerIndex, player.seatIndex));
+      this.createPlayerArea(
+        canvas,
+        layout,
+        view,
+        player,
+        this.positionForOpponent(view.playerIndex, player.seatIndex),
+        displayedCurrentPlayer,
+        thinkingSeat,
+      );
     });
   }
 
-  private createPlayerArea(canvas: Node, layout: RuntimeLayout, view: PlayerGameView, player: PlayerPublicView, position: LocalSeatPosition): void {
+  private createPlayerArea(
+    canvas: Node,
+    layout: RuntimeLayout,
+    view: PlayerGameView,
+    player: PlayerPublicView,
+    position: LocalSeatPosition,
+    displayedCurrentPlayer: number,
+    thinkingSeat: number | null,
+  ): void {
     const config = this.playerAreaConfig(layout, position);
     const root = ensureChild(canvas, `Player_${position}`);
     root.setPosition(config.position);
     this.setNodeAngle(root, this.sideAngle(position));
-    root.removeAllChildren();
+    this.seatByPosition.set(position, player.seatIndex);
 
-    if (view.currentPlayer === player.seatIndex) {
-      createImage(root, 'TurnGlow', 'textures/ui/turn_glow', config.width * 1.12, config.height * 1.18);
-    }
+    const turnGlow = createImage(root, 'TurnGlow', 'textures/ui/turn_glow', config.width * 1.12, config.height * 1.18);
+    turnGlow.active = displayedCurrentPlayer === player.seatIndex;
 
     createImage(root, 'PlayerPanel', position === 'bottom' ? 'textures/ui/player_panel_self' : 'textures/ui/player_panel_other', config.width, config.height);
     const avatarSize = config.height * 0.76;
     const avatarPosition = this.avatarPosition(config.width, config.height, position);
     createRemoteImage(root, 'Avatar', player.avatarUrl || '', 'textures/ui/default_avatar', avatarSize, avatarSize, avatarPosition);
     this.createText(root, 'Nickname', player.nickname || `${player.seatIndex}号位`, new Vec3(config.width * 0.1, config.height * 0.14, 0), layout.s(position === 'bottom' ? 1.85 : 1.55));
-    this.createText(root, 'Score', `分数 ${view.scores[player.seatIndex] ?? 0}`, new Vec3(config.width * 0.1, -config.height * 0.2, 0), layout.s(position === 'bottom' ? 1.65 : 1.4), new Color(255, 234, 166, 255));
+    const displayedScores = getDisplayedScores(view);
+    this.createText(root, 'Score', `总分 ${displayedScores[player.seatIndex] ?? 0}`, new Vec3(config.width * 0.1, -config.height * 0.2, 0), layout.s(position === 'bottom' ? 1.65 : 1.4), new Color(255, 234, 166, 255));
 
-    if (view.dealer === player.seatIndex) {
-      createImage(root, 'DealerBadge', 'textures/ui/dealer_badge', avatarSize * 0.42, avatarSize * 0.42, new Vec3(avatarPosition.x - avatarSize * 0.38, avatarPosition.y + avatarSize * 0.35, 0));
-    }
+    const dealerBadge = createImage(root, 'DealerBadge', 'textures/ui/dealer_badge', avatarSize * 0.42, avatarSize * 0.42, new Vec3(avatarPosition.x - avatarSize * 0.38, avatarPosition.y + avatarSize * 0.35, 0));
+    dealerBadge.active = view.dealer === player.seatIndex;
+    this.createText(
+      root,
+      'TurnIndicatorText',
+      thinkingSeat === player.seatIndex ? '思考中' : '出牌中',
+      new Vec3(config.width * 0.23, config.height * 0.52, 0),
+      layout.s(position === 'bottom' ? 1.55 : 1.35),
+      new Color(255, 228, 92, 255),
+    );
+    ensureChild(root, 'TurnIndicatorText').active = displayedCurrentPlayer === player.seatIndex && this.turnPulseVisible;
 
     this.createDiscardArea(canvas, layout, position, player.discards, view.lastDiscard?.fromPlayer === player.seatIndex ? view.lastDiscard.tile : null);
-    this.createMeldArea(canvas, layout, position, player.melds.map((meld) => meld.tiles).flat());
+    this.createMeldArea(canvas, layout, position, player.melds.map((meld) => meld.tiles));
     if (position !== 'bottom') this.createOpponentHandCount(canvas, layout, position, player.handCount);
   }
 
@@ -214,31 +315,69 @@ export class GameController extends BaseScene {
     const area = ensureChild(canvas, `Discard_${position}`);
     area.setPosition(config.position);
     this.setNodeAngle(area, this.sideAngle(position));
-    area.removeAllChildren();
-    createImage(area, 'DiscardAreaBg', 'textures/ui/discard_area', config.width, config.height);
+    area.children.forEach((child) => {
+      if (child.name.startsWith('DiscardTile')) child.active = false;
+    });
+    const discardBackground = createImage(area, 'DiscardAreaBg', 'textures/ui/discard_area', config.width, config.height);
+    discardBackground.active = discards.length > 0;
     const visibleDiscards = discards.slice(-18);
+    const previousCount = this.discardCounts.get(position);
+    const animateNewestTile = previousCount !== undefined && discards.length > previousCount;
     const lastHighlightIndex = highlightedTile === null ? -1 : findLastIndex(visibleDiscards, (tile) => tile === highlightedTile);
     visibleDiscards.forEach((tile, index) => {
       const col = index % 6;
       const row = Math.floor(index / 6);
       const tilePosition = new Vec3((col - 2.5) * config.tileW * 0.86, config.height * 0.2 - row * config.tileH * 0.66, 0);
       if (index === lastHighlightIndex) {
-        createPanel(area, `DiscardTileGlow${index}`, config.tileW * 1.18, config.tileH * 1.14, new Color(255, 218, 82, 175), tilePosition);
+        const glow = createImage(area, `DiscardTileGlow${index}`, 'textures/ui/tile_selected_glow', config.tileW * 1.28, config.tileH * 1.18, tilePosition);
+        glow.active = true;
       }
-      this.createTile(area, `DiscardTile${index}`, tile, tilePosition, config.tileW, config.tileH);
+      const tileNode = this.createTile(area, `DiscardTile${index}`, tile, tilePosition, config.tileW, config.tileH);
+      tileNode.active = true;
+      if (animateNewestTile && index === visibleDiscards.length - 1) {
+        this.animatePop(tileNode, 0.72, 0.2);
+      }
     });
+    if (animateNewestTile && visibleDiscards.length > 0) {
+      gameAudio.play('tileDiscard', 0.55);
+    }
+    this.discardCounts.set(position, discards.length);
   }
 
-  private createMeldArea(canvas: Node, layout: RuntimeLayout, position: LocalSeatPosition, tiles: TileId[]): void {
+  private createMeldArea(canvas: Node, layout: RuntimeLayout, position: LocalSeatPosition, melds: TileId[][]): void {
     const config = this.meldAreaConfig(layout, position);
     const area = ensureChild(canvas, `Meld_${position}`);
     area.setPosition(config.position);
     this.setNodeAngle(area, this.sideAngle(position));
-    area.removeAllChildren();
-    createImage(area, 'MeldAreaBg', 'textures/ui/meld_area', config.width, config.height);
-    tiles.slice(0, 12).forEach((tile, index) => {
-      this.createTile(area, `MeldTile${index}`, tile, new Vec3((index - 5.5) * config.tileW * 0.62, 0, 0), config.tileW, config.tileH);
+    const meldTileCount = melds.reduce((sum, meld) => sum + meld.length, 0);
+    const previousMeldTileCount = this.meldTileCounts.get(position);
+    const hasNewMeld = previousMeldTileCount !== undefined && meldTileCount > previousMeldTileCount;
+    this.meldTileCounts.set(position, meldTileCount);
+    area.active = melds.some((meld) => meld.length > 0);
+    if (!area.active) return;
+    area.children.forEach((child) => {
+      if (child.name.startsWith('MeldTile')) child.active = false;
     });
+    createImage(area, 'MeldAreaBg', 'textures/ui/meld_area', config.width, config.height);
+    const visibleMelds = melds.slice(0, 4);
+    const contentUnits = 1
+      + visibleMelds.reduce((sum, meld) => sum + Math.max(0, meld.length - 1) * 0.64, 0)
+      + Math.max(0, visibleMelds.length - 1) * 1.15;
+    const tileWidth = Math.min(config.tileW, config.width * 0.9 / contentUnits);
+    const tileHeight = tileWidth * (config.tileH / config.tileW);
+    const tileGap = tileWidth * 0.64;
+    const groupGap = tileWidth * 1.15;
+    const totalSpan = visibleMelds.reduce((sum, meld) => sum + Math.max(0, meld.length - 1) * tileGap, 0)
+      + Math.max(0, visibleMelds.length - 1) * groupGap;
+    let cursor = -totalSpan / 2;
+    visibleMelds.forEach((meld, meldIndex) => {
+      meld.forEach((tile, tileIndex) => {
+        const tileNode = this.createTile(area, `MeldTile${meldIndex}_${tileIndex}`, tile, new Vec3(cursor + tileIndex * tileGap, 0, 0), tileWidth, tileHeight);
+        tileNode.active = true;
+      });
+      cursor += Math.max(0, meld.length - 1) * tileGap + groupGap;
+    });
+    if (hasNewMeld) gameAudio.play('meld', 0.62);
   }
 
   private createOpponentHandCount(canvas: Node, layout: RuntimeLayout, position: LocalSeatPosition, count: number): void {
@@ -246,12 +385,15 @@ export class GameController extends BaseScene {
     const area = ensureChild(canvas, `HandCount_${position}`);
     area.setPosition(config.position);
     this.setNodeAngle(area, this.sideAngle(position));
-    area.removeAllChildren();
+    area.children.forEach((child) => {
+      if (child.name.startsWith('BackTile')) child.active = false;
+    });
     const displayCount = Math.min(count, 13);
     for (let index = 0; index < displayCount; index += 1) {
       const offset = (index - (displayCount - 1) / 2) * config.gap;
       const positionVec = new Vec3(offset, 0, 0);
-      this.createTile(area, `BackTile${index}`, null, positionVec, config.tileW, config.tileH, true);
+      const tileNode = this.createTile(area, `BackTile${index}`, null, positionVec, config.tileW, config.tileH, true);
+      tileNode.active = true;
     }
     this.createText(area, 'HandCountText', `${count}`, new Vec3(0, -config.tileH * 0.72, 0), layout.s(1.4), new Color(255, 255, 255, 255));
   }
@@ -260,7 +402,9 @@ export class GameController extends BaseScene {
     const handArea = ensureChild(canvas, 'SelfHandArea');
     handArea.setPosition(layout.pos(4, -33));
     this.setNodeAngle(handArea, 0);
-    handArea.removeAllChildren();
+    handArea.children.forEach((child) => {
+      if (child.name.startsWith('SelfTile')) child.active = false;
+    });
 
     const legal = new Set(legalDiscardTiles);
     const canDiscard = legalDiscardTiles.length > 0;
@@ -269,99 +413,317 @@ export class GameController extends BaseScene {
     const tileH = tileW * 1.36;
     const gap = tileW * 0.8;
     sorted.forEach((tile, index) => {
-      const isSelected = this.selectedHandIndex === index;
+      const isSelected = this.selectedHandIndex === index && this.lastTapTile === tile;
       const node = this.createTile(
         handArea,
         `SelfTile${index}`,
         tile,
-        new Vec3((index - (sorted.length - 1) / 2) * gap, isSelected ? tileH * 0.22 : 0, 0),
+        new Vec3((index - (sorted.length - 1) / 2) * gap, isSelected ? tileH * 0.28 : 0, 0),
         tileW,
         tileH,
       );
       node.active = true;
-      if (!canDiscard) return;
-      node.on('touch-end', () => {
-        if (!legal.has(tile)) return;
-        const now = Date.now();
-        const isQuickSecondTap = this.lastTapTile === tile && now - this.lastTapAt <= 650;
-        if (this.selectedHandIndex === index || isQuickSecondTap) {
+      const tileSprite = ensureComponent(ensureChild(node, 'TileImage'), Sprite);
+      tileSprite.color = isSelected ? new Color(255, 235, 145, 255) : Color.WHITE;
+      const previousHandler = this.handTouchHandlers.get(node);
+      if (previousHandler) {
+        node.off('touch-end', previousHandler);
+        this.handTouchHandlers.delete(node);
+      }
+      const handler = (): void => {
+        const isSameSelectedTile = this.selectedHandIndex === index && this.lastTapTile === tile;
+        if (isSameSelectedTile) {
+          if (!canDiscard) {
+            this.showNotice(view.currentPlayer === view.playerIndex ? '当前没有可出的牌' : '还没轮到你出牌');
+            return;
+          }
+          if (!legal.has(tile)) {
+            this.showNotice('当前不能打出这张牌');
+            return;
+          }
           eventBus.emit(GameEvents.DISCARD_REQUESTED, tile);
           return;
         }
 
         this.selectedHandIndex = index;
         this.lastTapTile = tile;
-        this.lastTapAt = now;
+        gameAudio.play('tileSelect', 0.42);
         this.createSelfHand(canvas, layout, view, legalDiscardTiles);
-      });
+        this.animateLift(node, tileH * 0.28);
+      };
+      this.handTouchHandlers.set(node, handler);
+      node.on('touch-end', handler);
     });
   }
 
-  private createActionPanel(canvas: Node, layout: RuntimeLayout, actions: GameAction[], submitting: boolean): void {
+  private createActionPanel(canvas: Node, layout: RuntimeLayout, view: PlayerGameView, submitting: boolean): void {
+    const actions = view.legalActions;
     const panel = ensureChild(canvas, 'ActionPanel');
-    panel.setPosition(layout.pos(31, -25));
-    panel.removeAllChildren();
+    panel.children.forEach((child) => {
+      if (child.name.startsWith('Action_')) child.active = false;
+    });
     const visibleActions = actions
-      .filter((action) => action.type !== 'DISCARD' && action.type !== 'SELECT_KONG_TILE')
+      .filter((action) => action.type !== 'DISCARD' && action.type !== 'SELECT_KONG_TILE' && !MELD_ACTION_TYPES.has(action.type))
       .sort((a, b) => ACTION_ORDER.indexOf(a.type) - ACTION_ORDER.indexOf(b.type));
     panel.active = visibleActions.length > 0;
+    if (visibleActions.length === 0) {
+      this.winPromptSignature = '';
+      return;
+    }
+
+    const winAction = visibleActions.find((action) => action.type === 'WIN');
+    if (winAction) {
+      panel.setPosition(layout.pos(29, -20.5));
+      const promptWidth = layout.w(20);
+      const promptHeight = promptWidth / (640 / 260);
+      const promptBackground = createImage(panel, 'ActionPromptBg', 'textures/ui/room_panel', promptWidth, promptHeight);
+      promptBackground.active = true;
+      (promptBackground as Node & { setSiblingIndex?: (index: number) => void }).setSiblingIndex?.(0);
+
+      this.createText(
+        panel,
+        'WinPromptTitle',
+        submitting ? '正在确认' : '可以胡牌',
+        new Vec3(promptWidth * 0.13, promptHeight * 0.29, 0),
+        layout.s(1.65),
+        new Color(255, 236, 158, 255),
+      );
+      ensureChild(panel, 'WinPromptTitle').active = true;
+
+      const responseTile = this.responseTile(view) ?? winAction.tile ?? null;
+      const tileWidth = layout.w(3.25);
+      const tileHeight = tileWidth * 1.36;
+      const tilePosition = new Vec3(-promptWidth * 0.32, -promptHeight * 0.04, 0);
+      const tileGlow = createImage(panel, 'WinTargetGlow', 'textures/ui/tile_selected_glow', tileWidth * 1.42, tileHeight * 1.2, tilePosition);
+      tileGlow.active = responseTile !== null;
+      const targetTile = ensureChild(panel, 'WinTargetTile');
+      targetTile.active = responseTile !== null;
+      if (responseTile !== null) {
+        this.createTile(panel, 'WinTargetTile', responseTile, tilePosition, tileWidth, tileHeight).active = true;
+        this.createText(
+          panel,
+          'WinTargetName',
+          getTileLabel(responseTile),
+          new Vec3(tilePosition.x, -promptHeight * 0.39, 0),
+          layout.s(1.15),
+          new Color(229, 246, 215, 255),
+        );
+        ensureChild(panel, 'WinTargetName').active = true;
+      } else {
+        const targetName = panel.children.find((child) => child.name === 'WinTargetName');
+        if (targetName) targetName.active = false;
+      }
+
+      const promptActions = visibleActions.filter((action) => action.type === 'WIN' || action.type === 'PASS');
+      const buttonWidth = layout.w(5.05);
+      const buttonHeight = buttonWidth / 1.7;
+      const buttonCenterX = promptWidth * 0.18;
+      promptActions.forEach((action, index) => {
+        const button = createImageButton(
+          panel,
+          `Action_${action.type}_${index}`,
+          '',
+          ACTION_IMAGE_PATHS[action.type] || 'textures/ui/action_button_pass',
+          () => {
+            if (!submitting) {
+              gameAudio.play('button', 0.5);
+              eventBus.emit(GameEvents.ACTION_SELECTED, action);
+            }
+          },
+          new Vec3(buttonCenterX + (index - (promptActions.length - 1) / 2) * buttonWidth * 1.12, -promptHeight * 0.08, 0),
+          buttonWidth,
+          buttonHeight,
+        );
+        button.active = true;
+        (button as Node & { setSiblingIndex?: (siblingIndex: number) => void }).setSiblingIndex?.(panel.children.length - 1);
+      });
+
+      const signature = `${winAction.actionId}:${responseTile ?? 'none'}`;
+      if (signature !== this.winPromptSignature) {
+        this.winPromptSignature = signature;
+        this.animatePop(panel, 0.9, 0.22);
+      }
+      return;
+    }
+
+    this.winPromptSignature = '';
+    ['ActionPromptBg', 'WinPromptTitle', 'WinTargetGlow', 'WinTargetTile', 'WinTargetName'].forEach((name) => {
+      const node = panel.children.find((child) => child.name === name);
+      if (node) node.active = false;
+    });
+    const hasCenteredChoice = actions.some(
+      (action) => MELD_ACTION_TYPES.has(action.type) || action.type === 'SELECT_KONG_TILE',
+    );
+    panel.setPosition(hasCenteredChoice ? layout.pos(0, -19) : layout.pos(31, -30));
 
     visibleActions.forEach((action, index) => {
-      const width = action.type === 'WIN' ? layout.w(6.3) : action.type === 'SELECT_KONG_TILE' ? layout.w(7.5) : layout.w(5.6);
+      const width = action.type === 'PASS' && hasCenteredChoice
+        ? layout.w(6.4)
+        : action.type === 'WIN'
+          ? layout.w(6.3)
+          : action.type === 'SELECT_KONG_TILE'
+            ? layout.w(7.5)
+            : layout.w(5.6);
       const height = width / (action.type === 'WIN' ? 1.72 : action.type === 'SELECT_KONG_TILE' ? 2.24 : 1.68);
-      createImageButton(
+      const button = createImageButton(
         panel,
         `Action_${action.type}_${index}`,
         '',
         ACTION_IMAGE_PATHS[action.type] || 'textures/ui/action_button_pass',
         () => {
-          if (!submitting) eventBus.emit(GameEvents.ACTION_SELECTED, action);
+          if (!submitting) {
+            gameAudio.play('button', 0.5);
+            eventBus.emit(GameEvents.ACTION_SELECTED, action);
+          }
         },
         new Vec3((index - (visibleActions.length - 1) / 2) * width * 1.02, 0, 0),
         width,
         height,
       );
+      button.active = true;
     });
+  }
+
+  private createMeldActionChoices(canvas: Node, layout: RuntimeLayout, actions: GameAction[], submitting: boolean): void {
+    const choices = actions.filter((action) => MELD_ACTION_TYPES.has(action.type) && getActionPreviewTiles(action).length > 0);
+    const layer = ensureChild(canvas, 'MeldActionChoices');
+    layer.active = choices.length > 0;
+    if (choices.length === 0) {
+      this.meldChoiceSignature = '';
+      return;
+    }
+    layer.setPosition(layout.pos(0, -1.8));
+    layer.children.forEach((child) => {
+      if (child.name.startsWith('MeldChoice_')) child.active = false;
+    });
+
+    const visibleChoices = choices.slice(0, 4);
+    const panelWidth = layout.w(44);
+    const panelHeight = panelWidth / (1600 / 656);
+    const optionWidth = panelWidth * 0.365;
+    const optionHeight = panelHeight * 0.255;
+    const oldFallback = layer.children.find((child) => child.name === 'MeldChoiceBg');
+    if (oldFallback) oldFallback.active = false;
+    const backdrop = createImage(layer, 'MeldChoiceBackdrop', 'textures/ui/action_background', panelWidth, panelHeight);
+    (backdrop as Node & { setSiblingIndex?: (index: number) => void }).setSiblingIndex?.(0);
+    this.createText(layer, 'MeldChoiceTitle', '选择牌型', new Vec3(0, panelHeight * 0.395, 0), layout.s(2.25), new Color(61, 52, 30, 255));
+
+    visibleChoices.forEach((action, index) => {
+      const row = Math.floor(index / 2);
+      const column = index % 2;
+      const x = (column === 0 ? -1 : 1) * panelWidth * 0.192;
+      const y = row === 0 ? panelHeight * 0.116 : -panelHeight * 0.192;
+      const option = ensureChild(layer, `MeldChoice_${index}`);
+      option.setPosition(x, y, 0);
+      option.active = true;
+      ensureComponent(option, UITransform).setContentSize(optionWidth, optionHeight);
+      const optionSprite = option.getComponent(Sprite);
+      if (optionSprite) (optionSprite as Sprite & { enabled: boolean }).enabled = false;
+      (option as Node & { setSiblingIndex?: (siblingIndex: number) => void }).setSiblingIndex?.(layer.children.length - 1);
+      const optionBg = option.children.find((child) => child.name === 'OptionBg');
+      if (optionBg) optionBg.active = false;
+      bindTouchEnd(option, () => {
+        if (!submitting) {
+          gameAudio.play('button', 0.5);
+          eventBus.emit(GameEvents.ACTION_SELECTED, action);
+        }
+      });
+      option.children.forEach((child) => {
+        if (child.name.startsWith('PreviewTile_')) child.active = false;
+      });
+
+      const previewTiles = getActionPreviewTiles(action);
+      const tileWidth = layout.w(2.2);
+      const tileHeight = tileWidth * 1.36;
+      const tileGap = tileWidth * 0.8;
+      const label = this.meldActionLabel(action.type);
+      this.createText(option, 'ActionLabel', label, new Vec3(-optionWidth * 0.34, 0, 0), layout.s(2.15), new Color(255, 232, 153, 255));
+      ensureChild(option, 'ActionLabel').active = true;
+      previewTiles.forEach((tile, tileIndex) => {
+        const tileX = optionWidth * 0.15 + (tileIndex - (previewTiles.length - 1) / 2) * tileGap;
+        const tileNode = this.createTile(option, `PreviewTile_${tileIndex}`, tile, new Vec3(tileX, 0, 0), tileWidth, tileHeight);
+        tileNode.active = true;
+        ensureChild(tileNode, 'TileImage').active = true;
+      });
+    });
+    const titleNode = ensureChild(layer, 'MeldChoiceTitle');
+    titleNode.active = true;
+    (titleNode as Node & { setSiblingIndex?: (index: number) => void }).setSiblingIndex?.(layer.children.length - 1);
+    const signature = visibleChoices.map((action) => `${action.type}:${action.actionId}:${getActionPreviewTiles(action).join(',')}`).join('|');
+    if (signature !== this.meldChoiceSignature) {
+      this.meldChoiceSignature = signature;
+      this.animatePop(layer, 0.92, 0.22);
+    }
   }
 
   private createKongTileChoice(canvas: Node, layout: RuntimeLayout, actions: GameAction[], submitting: boolean): void {
     const choices = actions.filter((action) => action.type === 'SELECT_KONG_TILE' && action.tile !== undefined);
-    if (choices.length === 0) return;
-
     const layer = ensureChild(canvas, 'KongTileChoice');
-    layer.setPosition(layout.pos(0, -18));
-    layer.removeAllChildren();
+    layer.active = choices.length > 0;
+    if (choices.length === 0) {
+      this.kongChoiceSignature = '';
+      return;
+    }
+    layer.setPosition(layout.pos(0, -1.5));
+    layer.children.forEach((child) => {
+      if (child.name.startsWith('KongChoice')) child.active = false;
+    });
 
-    const panelWidth = layout.w(26);
-    const panelHeight = layout.h(16);
-    createPanel(layer, 'ChoiceBg', panelWidth, panelHeight, new Color(10, 58, 43, 238));
-    createPanel(layer, 'ChoiceGlow', panelWidth * 0.94, panelHeight * 0.86, new Color(255, 218, 82, 55));
-    this.createText(layer, 'ChoiceTitle', '选择杠后补牌', new Vec3(0, panelHeight * 0.32, 0), layout.s(1.85), new Color(255, 240, 168, 255));
+    const panelWidth = layout.w(40);
+    const panelHeight = panelWidth / (1616 / 656);
+    const choiceBackground = createImage(layer, 'ChoiceBg', 'textures/ui/kong_card_action_backgroud', panelWidth, panelHeight);
+    (choiceBackground as Node & { setSiblingIndex?: (index: number) => void }).setSiblingIndex?.(0);
+    const oldGlow = layer.children.find((child) => child.name === 'ChoiceGlow');
+    if (oldGlow) oldGlow.active = false;
+    this.createText(layer, 'ChoiceTitle', '选择杠后补牌', new Vec3(0, panelHeight * 0.405, 0), layout.s(1.85), new Color(61, 52, 30, 255));
 
     choices.slice(0, 2).forEach((action, index) => {
       const tile = action.tile as TileId;
-      const x = (index - (Math.min(choices.length, 2) - 1) / 2) * layout.w(7);
-      const tileNode = this.createTile(layer, `KongChoiceTile${index}`, tile, new Vec3(x, -panelHeight * 0.04, 0), layout.w(3.9), layout.w(5.3));
-      createPanel(layer, `KongChoiceHit${index}`, layout.w(5.4), layout.w(6.7), new Color(255, 255, 255, 1), new Vec3(x, -panelHeight * 0.04, 0)).on('touch-end', () => {
-        if (!submitting) eventBus.emit(GameEvents.ACTION_SELECTED, action);
+      const x = (index === 0 ? -1 : 1) * panelWidth * 0.214;
+      const choiceNode = ensureChild(layer, `KongChoiceHit${index}`);
+      choiceNode.setPosition(x, -panelHeight * 0.045, 0);
+      ensureComponent(choiceNode, UITransform).setContentSize(panelWidth * 0.19, panelHeight * 0.61);
+      const choiceSprite = choiceNode.getComponent(Sprite);
+      if (choiceSprite) (choiceSprite as Sprite & { enabled: boolean }).enabled = false;
+      choiceNode.active = true;
+      (choiceNode as Node & { setSiblingIndex?: (siblingIndex: number) => void }).setSiblingIndex?.(layer.children.length - 1);
+      bindTouchEnd(choiceNode, () => {
+        if (!submitting) {
+          gameAudio.play('button', 0.5);
+          eventBus.emit(GameEvents.ACTION_SELECTED, action);
+        }
       });
-      this.createText(layer, `KongChoiceName${index}`, getTileLabel(tile), new Vec3(x, -panelHeight * 0.42, 0), layout.s(1.35), new Color(235, 248, 217, 255));
+      const tileNode = this.createTile(choiceNode, 'Tile', tile, new Vec3(0, panelHeight * 0.015, 0), panelWidth * 0.105, panelWidth * 0.143);
+      this.createText(choiceNode, 'TileName', getTileLabel(tile), new Vec3(0, -panelHeight * 0.34, 0), layout.s(1.35), new Color(235, 248, 217, 255));
       tileNode.active = true;
+      ensureChild(tileNode, 'TileImage').active = true;
+      ensureChild(choiceNode, 'TileName').active = true;
     });
+    const choiceTitle = ensureChild(layer, 'ChoiceTitle');
+    choiceTitle.active = true;
+    (choiceTitle as Node & { setSiblingIndex?: (index: number) => void }).setSiblingIndex?.(layer.children.length - 1);
+    const signature = choices.slice(0, 2).map((action) => `${action.actionId}:${action.tile}`).join('|');
+    if (signature !== this.kongChoiceSignature) {
+      this.kongChoiceSignature = signature;
+      this.animatePop(layer, 0.9, 0.24);
+    }
   }
 
   private createResponseHint(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
-    const responseTile = this.responseTile(view);
-    if (responseTile === null) return;
-
     const hint = ensureChild(canvas, 'ResponseHint');
+    if (view.legalActions.some((action) => MELD_ACTION_TYPES.has(action.type) || action.type === 'WIN')) {
+      hint.active = false;
+      return;
+    }
+    const responseTile = this.responseTile(view);
+    hint.active = responseTile !== null;
+    if (responseTile === null) return;
     hint.setPosition(layout.pos(31, -16.5));
-    hint.removeAllChildren();
 
     const panelWidth = layout.w(14);
     const panelHeight = layout.h(10.5);
-    createPanel(hint, 'ResponseHintBg', panelWidth, panelHeight, new Color(14, 71, 50, 230));
-    createPanel(hint, 'ResponseHintGlow', panelWidth * 0.94, panelHeight * 0.86, new Color(255, 218, 82, 70));
+    createImage(hint, 'ResponseHintBg', 'textures/ui/room_panel', panelWidth, panelHeight);
+    createImage(hint, 'ResponseHintGlow', 'textures/ui/turn_glow', panelWidth * 0.82, panelHeight * 0.5, new Vec3(0, -panelHeight * 0.08, 0));
     this.createText(hint, 'ResponseHintTitle', '可响应', new Vec3(0, panelHeight * 0.27, 0), layout.s(1.65), new Color(255, 240, 168, 255));
     this.createTile(hint, 'ResponseHintTile', responseTile, new Vec3(0, -panelHeight * 0.11, 0), layout.w(3.4), layout.w(4.65));
     this.createText(hint, 'ResponseHintName', getTileLabel(responseTile), new Vec3(0, -panelHeight * 0.38, 0), layout.s(1.35), new Color(235, 248, 217, 255));
@@ -369,13 +731,13 @@ export class GameController extends BaseScene {
 
   private createResultDialog(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
     const layer = ensureChild(canvas, 'ResultDialogLayer');
-    layer.removeAllChildren();
+    layer.active = true;
     createPanel(layer, 'Mask', layout.width, layout.height, new Color(0, 0, 0, 165));
     const isFinal = this.isFinalResult(view);
-    const dialogWidth = isFinal ? layout.w(62) : layout.w(56);
-    const dialogHeight = isFinal ? layout.h(78) : layout.h(72);
+    const dialogWidth = layout.w(isFinal ? 62 : 60);
+    const dialogHeight = dialogWidth / (1200 / 880);
     createPanel(layer, 'DialogFallback', dialogWidth, dialogHeight, new Color(9, 57, 43, 245));
-    createImage(layer, 'DialogBg', isFinal ? 'textures/ui/final_result_dialog_bg' : 'textures/ui/result_dialog_bg', dialogWidth, dialogHeight);
+    createImage(layer, 'DialogBg', 'textures/ui/result_board', dialogWidth, dialogHeight);
 
     const result = view.result;
     const selfWon = Boolean(result?.winnerIndexes.includes(view.playerIndex));
@@ -383,53 +745,91 @@ export class GameController extends BaseScene {
       layer,
       'ResultTitle',
       isFinal ? '总分结算' : result?.title || (view.status === 'DRAW' ? '流局' : selfWon ? '胡牌结算' : '本局结算'),
-      layout.pos(0, 27),
-      layout.s(3.6),
+      new Vec3(0, dialogHeight * 0.405, 0),
+      layout.s(2.75),
       new Color(255, 234, 164, 255),
     );
-    this.createText(layer, 'RoundText', `第 ${view.currentRound ?? this.currentRound} / ${this.displayMaxRounds(view)} 局`, layout.pos(0, 22.5), layout.s(2.0), new Color(218, 244, 205, 255));
+    this.createText(layer, 'RoundText', `第 ${view.currentRound ?? this.currentRound} / ${this.displayMaxRounds(view)} 局`, new Vec3(0, dialogHeight * 0.35, 0), layout.s(1.55), new Color(218, 244, 205, 255));
 
-    this.createResultScores(layer, layout, view, result);
-    this.createFanList(layer, layout, result);
+    this.createResultScores(layer, layout, view, result, dialogWidth, dialogHeight);
+    this.createFanList(layer, layout, result, dialogWidth, dialogHeight);
+    const replayButton = layer.children.find((child) => child.name === 'ReplayButton');
+    if (replayButton) replayButton.active = false;
+    const buttonWidth = dialogWidth * 0.185;
+    const buttonPosition = new Vec3(0, -dialogHeight * 0.368, 0);
 
     if (isFinal) {
-      createImageButton(layer, 'EndGameButton', '', 'textures/ui/button_back_room', () => this.backToRoom(), layout.pos(-11, -29), layout.w(18), layout.w(18) / 3.02);
-      createImageButton(layer, 'ReplayButton', '', 'textures/ui/button_replay', () => loadScene('Replay'), layout.pos(11, -29), layout.w(18), layout.w(18) / 3.02);
+      const continueButton = layer.children.find((child) => child.name === 'ContinueButton');
+      if (continueButton) continueButton.active = false;
+      createImageButton(layer, 'EndGameButton', '', 'textures/ui/button_back_room', () => this.backToRoom(), buttonPosition, buttonWidth, buttonWidth / 3.02).active = true;
       return;
     }
 
-    createImageButton(layer, 'ContinueButton', '', 'textures/ui/button_continue', () => this.continueGame(), layout.pos(-11, -29), layout.w(18), layout.w(18) / 3.02);
-    createImageButton(layer, 'ReplayButton', '', 'textures/ui/button_replay', () => loadScene('Replay'), layout.pos(11, -29), layout.w(18), layout.w(18) / 3.02);
+    const endGameButton = layer.children.find((child) => child.name === 'EndGameButton');
+    if (endGameButton) endGameButton.active = false;
+    createImageButton(layer, 'ContinueButton', '', 'textures/ui/button_continue', () => this.continueGame(), buttonPosition, buttonWidth, buttonWidth / 3.02).active = true;
   }
 
-  private createResultScores(layer: Node, layout: RuntimeLayout, view: PlayerGameView, result?: ScoreResult): void {
+  private createResultScores(
+    layer: Node,
+    layout: RuntimeLayout,
+    view: PlayerGameView,
+    result: ScoreResult | undefined,
+    dialogWidth: number,
+    dialogHeight: number,
+  ): void {
     const names = this.playerNames(view);
+    const avatarUrls = this.playerAvatarUrls(view);
     const deltas = result?.scoreDelta || [0, 0, 0, 0];
+    layer.children.forEach((child) => {
+      if (child.name.startsWith('ScoreRow')) child.active = false;
+    });
+    const rowYRatios = [0.218, 0.064, -0.087, -0.239];
+    const avatarSize = dialogHeight * 0.1;
     for (let index = 0; index < 4; index += 1) {
-      const y = 16 - index * 6.5;
+      const y = dialogHeight * rowYRatios[index];
       const delta = deltas[index] || 0;
-      const rowPath = delta >= 0 ? 'textures/ui/score_row_win' : 'textures/ui/score_row_lose';
-      createImage(layer, `ScoreRow${index}`, rowPath, layout.w(46), layout.h(6.3), layout.pos(0, y));
-      this.createText(layer, `ScoreName${index}`, `${index}号 ${names[index] || '玩家'}`, layout.pos(-14, y), layout.s(2.0));
-      this.createText(layer, `ScoreDelta${index}`, `${delta >= 0 ? '+' : ''}${delta}`, layout.pos(13, y), layout.s(2.55), delta >= 0 ? new Color(255, 229, 137, 255) : new Color(170, 230, 255, 255));
+      createRemoteImage(
+        layer,
+        `ScoreAvatar${index}`,
+        avatarUrls[index],
+        'textures/ui/default_avatar',
+        avatarSize,
+        avatarSize,
+        new Vec3(-dialogWidth * 0.321, y, 0),
+      );
+      this.createText(layer, `ScoreName${index}`, `${index}号  ${names[index] || '玩家'}`, new Vec3(-dialogWidth * 0.2, y, 0), layout.s(1.7));
+      this.createText(layer, `ScoreDelta${index}`, `${delta >= 0 ? '+' : ''}${delta}`, new Vec3(dialogWidth * 0.06, y, 0), layout.s(2.15), delta >= 0 ? new Color(255, 229, 137, 255) : new Color(170, 230, 255, 255));
     }
   }
 
-  private createFanList(layer: Node, layout: RuntimeLayout, result?: ScoreResult): void {
+  private createFanList(
+    layer: Node,
+    layout: RuntimeLayout,
+    result: ScoreResult | undefined,
+    dialogWidth: number,
+    dialogHeight: number,
+  ): void {
     const fanItems = result?.fanItems || [];
-    this.createText(layer, 'FanTitle', '番型明细', layout.pos(0, -10), layout.s(2.35), new Color(255, 238, 170, 255));
-    fanItems.slice(0, 4).forEach((item, index) => {
-      const y = -15 - index * 4.8;
-      createImage(layer, `FanItemBg${index}`, 'textures/ui/fan_item_bg', layout.w(42), layout.h(4.8), layout.pos(0, y));
-      this.createText(layer, `FanItemText${index}`, `${item.name}  ${item.points}分`, layout.pos(0, y), layout.s(1.75));
+    layer.children.forEach((child) => {
+      if (child.name.startsWith('FanItem') || child.name === 'FanEmptyText') child.active = false;
     });
-    if (fanItems.length === 0) this.createText(layer, 'FanEmptyText', '暂无番型明细', layout.pos(0, -17), layout.s(2.1));
+    const columnX = dialogWidth * 0.29;
+    this.createText(layer, 'FanTitle', '番型明细', new Vec3(columnX, dialogHeight * 0.218, 0), layout.s(1.8), new Color(255, 238, 170, 255));
+    fanItems.slice(0, 6).forEach((item, index) => {
+      const y = dialogHeight * (0.135 - index * 0.069);
+      this.createText(layer, `FanItemText${index}`, `${item.name}  ${item.points}分`, new Vec3(columnX, y, 0), layout.s(1.35), new Color(225, 241, 211, 255));
+      ensureChild(layer, `FanItemText${index}`).active = true;
+    });
+    if (fanItems.length === 0) {
+      this.createText(layer, 'FanEmptyText', '暂无番型', new Vec3(columnX, dialogHeight * 0.1, 0), layout.s(1.45), new Color(190, 213, 183, 255));
+      ensureChild(layer, 'FanEmptyText').active = true;
+    }
   }
 
   private createTile(parent: Node, name: string, tile: TileId | null, position: Vec3, width: number, height: number, faceDown = false): Node {
     const node = ensureChild(parent, name);
     node.setPosition(position);
-    node.removeAllChildren();
     ensureComponent(node, UITransform).setContentSize(width, height);
     const path = faceDown || tile === null ? TILE_BACK_TEXTURE : getTileTexturePath(tile);
     createImage(node, 'TileImage', path, width, height);
@@ -502,6 +902,14 @@ export class GameController extends BaseScene {
     return hasResponseAction ? view.lastDiscard.tile : null;
   }
 
+  private meldActionLabel(type: ActionType): string {
+    if (type === 'PONG') return '碰';
+    if (type === 'KONG_EXPOSED') return '明杠';
+    if (type === 'KONG_CONCEALED') return '暗杠';
+    if (type === 'KONG_ADDED') return '加杠';
+    return '吃';
+  }
+
   private maxRoundCount(): number {
     return roomManager.currentRoom?.rules.roundCount || 16;
   }
@@ -537,6 +945,15 @@ export class GameController extends BaseScene {
     return names;
   }
 
+  private playerAvatarUrls(view: PlayerGameView): string[] {
+    const urls = ['', '', '', ''];
+    urls[view.playerIndex] = (view.self as { avatarUrl?: string }).avatarUrl || '';
+    view.opponents.forEach((player) => {
+      urls[player.seatIndex] = player.avatarUrl || '';
+    });
+    return urls;
+  }
+
   private positionForOpponent(selfSeat: number, seat: number): LocalSeatPosition {
     const offset = (seat - selfSeat + 4) % 4;
     if (offset === 1) return 'right';
@@ -552,20 +969,20 @@ export class GameController extends BaseScene {
   }
 
   private discardAreaConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
-    const width = position === 'bottom' || position === 'top' ? layout.w(23) : layout.w(13);
-    const height = layout.h(10.5);
-    if (position === 'bottom') return { width, height, position: layout.pos(0, -15.5), tileW: layout.w(2.2), tileH: layout.w(3.0) };
+    const width = position === 'bottom' || position === 'top' ? layout.w(18.5) : layout.w(13);
+    const height = width / DISCARD_AREA_RATIO;
+    if (position === 'bottom') return { width, height, position: layout.pos(0, -21), tileW: layout.w(2.2), tileH: layout.w(3.0) };
     if (position === 'right') return { width, height, position: layout.pos(22, 3), tileW: layout.w(1.8), tileH: layout.w(2.45) };
-    if (position === 'top') return { width, height, position: layout.pos(0, 15.5), tileW: layout.w(2.05), tileH: layout.w(2.8) };
+    if (position === 'top') return { width, height, position: layout.pos(0, 14.5), tileW: layout.w(2.05), tileH: layout.w(2.8) };
     return { width, height, position: layout.pos(-22, 3), tileW: layout.w(1.8), tileH: layout.w(2.45) };
   }
 
   private meldAreaConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
-    const width = position === 'bottom' ? layout.w(24) : layout.w(15);
-    const height = layout.h(5.8);
-    if (position === 'bottom') return { width, height, position: layout.pos(-17, -23.5), tileW: layout.w(2.25), tileH: layout.w(3.05) };
+    const width = position === 'bottom' ? layout.w(22) : layout.w(17);
+    const height = width / MELD_AREA_RATIO;
+    if (position === 'bottom') return { width, height, position: layout.pos(-23, -30.5), tileW: layout.w(2.25), tileH: layout.w(3.05) };
     if (position === 'right') return { width, height, position: layout.pos(30, -12), tileW: layout.w(1.8), tileH: layout.w(2.45) };
-    if (position === 'top') return { width, height, position: layout.pos(-15, 23), tileW: layout.w(1.85), tileH: layout.w(2.5) };
+    if (position === 'top') return { width, height, position: layout.pos(-19, 23), tileW: layout.w(1.85), tileH: layout.w(2.5) };
     return { width, height, position: layout.pos(-30, -12), tileW: layout.w(1.8), tileH: layout.w(2.45) };
   }
 
@@ -576,8 +993,8 @@ export class GameController extends BaseScene {
   }
 
   private avatarPosition(width: number, height: number, position: LocalSeatPosition): Vec3 {
-    if (position === 'bottom') return new Vec3(-width * 0.29, height * 0.02, 0);
-    return new Vec3(-width * 0.4, height * 0.02, 0);
+    if (position === 'bottom') return new Vec3(-width * 0.318, height * 0.02, 0);
+    return new Vec3(-width * 0.279, height * 0.02, 0);
   }
 
   private sideAngle(position: LocalSeatPosition): number {
@@ -589,6 +1006,163 @@ export class GameController extends BaseScene {
   private setNodeAngle(node: Node, angle: number): void {
     (node as Node & { angle?: number }).angle = angle;
   }
+
+  private animatePop(node: Node, fromScale: number, duration: number): void {
+    node.setScale(fromScale, fromScale, 1);
+    tween(node).to(duration, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
+  }
+
+  private animateLift(node: Node, distance: number): void {
+    const target = new Vec3(node.position.x, node.position.y, node.position.z);
+    node.setPosition(target.x, target.y - distance, target.z);
+    tween(node).to(0.14, { position: target }, { easing: 'quadOut' }).start();
+  }
+
+  private playRoundOpeningAnimation(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
+    this.clearOpeningAnimationTimers();
+    const token = ++this.openingAnimationToken;
+    const layer = ensureChild(canvas, 'RoundOpeningAnimation');
+    layer.active = true;
+    layer.setPosition(Vec3.ZERO);
+    layer.setScale(1, 1, 1);
+    layer.children.forEach((child) => {
+      if (child.name.startsWith('OpeningHand_') || child.name.startsWith('RoundOpeningTile_')) child.active = false;
+    });
+    ['RoundOpeningMask', 'RoundOpeningTitle', 'RoundOpeningSubtitle'].forEach((name) => {
+      const oldNode = layer.children.find((child) => child.name === name);
+      if (oldNode) oldNode.active = false;
+    });
+
+    const openingHands: Array<{
+      position: LocalSeatPosition;
+      tiles: TileId[];
+      faceDown: boolean;
+    }> = [
+      {
+        position: 'bottom',
+        tiles: [...view.self.hand].sort((a, b) => a - b),
+        faceDown: false,
+      },
+      ...view.opponents.map((player) => ({
+        position: this.positionForOpponent(view.playerIndex, player.seatIndex),
+        tiles: Array.from({ length: Math.min(player.handCount, 13) }, () => 0),
+        faceDown: true,
+      })),
+    ];
+
+    openingHands.forEach(({ position, tiles, faceDown }) => {
+      const original = canvas.children.find((child) => child.name === (
+        position === 'bottom' ? 'SelfHandArea' : `HandCount_${position}`
+      ));
+      if (original) original.active = false;
+
+      const group = ensureChild(layer, `OpeningHand_${position}`);
+      const config = position === 'bottom'
+        ? {
+            position: layout.pos(4, -33),
+            tileW: layout.w(3.0),
+            tileH: layout.w(3.0) * 1.36,
+            gap: layout.w(3.0) * 0.8,
+          }
+        : this.opponentHandConfig(layout, position);
+      group.active = true;
+      group.setPosition(config.position);
+      group.setScale(1, 1, 1);
+      this.setNodeAngle(group, this.sideAngle(position));
+      group.children.forEach((child) => {
+        if (child.name.startsWith('OpeningTile_')) child.active = false;
+      });
+
+      tiles.forEach((tileId, index) => {
+        const target = new Vec3((index - (tiles.length - 1) / 2) * config.gap, 0, 0);
+        const tile = this.createTile(
+          group,
+          `OpeningTile_${index}`,
+          faceDown ? null : tileId,
+          Vec3.ZERO,
+          config.tileW,
+          config.tileH,
+          faceDown,
+        );
+        tile.active = true;
+        tile.setScale(0.82, 0.82, 1);
+        this.scheduleOpeningAnimationStep(token, index * 34, () => {
+          tween(tile)
+            .to(0.32, { position: target, scale: new Vec3(1, 1, 1) }, { easing: 'quadOut' })
+            .start();
+        });
+      });
+    });
+
+    gameAudio.play('roundStart', 0.3);
+    this.scheduleOpeningAnimationStep(token, 620, () => gameAudio.play('meld', 0.26));
+    this.scheduleOpeningAnimationStep(token, 880, () => {
+      ['bottom', 'right', 'top', 'left'].forEach((position) => {
+        const original = canvas.children.find((child) => child.name === (
+          position === 'bottom' ? 'SelfHandArea' : `HandCount_${position}`
+        ));
+        if (original) original.active = true;
+      });
+      layer.active = false;
+    });
+  }
+
+  private scheduleOpeningAnimationStep(token: number, delayMs: number, callback: () => void): void {
+    const timer = setTimeout(() => {
+      if (token === this.openingAnimationToken) callback();
+    }, delayMs);
+    this.openingAnimationTimers.push(timer);
+  }
+
+  private clearOpeningAnimationTimers(): void {
+    this.openingAnimationTimers.forEach((timer) => clearTimeout(timer));
+    this.openingAnimationTimers.length = 0;
+    this.openingAnimationToken += 1;
+  }
+
+  private readonly updateTurnPulse = (): void => {
+    this.turnPulseVisible = !this.turnPulseVisible;
+    const canvas = this.node.children.find((child) => child.name === 'RuntimeCanvas');
+    const view = gameManager.currentView;
+    if (!canvas || !view) return;
+    const displayedCurrentPlayer = gameManager.presentationAiSeat ?? view.currentPlayer;
+
+    (['bottom', 'right', 'top', 'left'] as LocalSeatPosition[]).forEach((position) => {
+      const playerRoot = canvas.children.find((child) => child.name === `Player_${position}`);
+      if (!playerRoot) return;
+      const isCurrent = this.seatByPosition.get(position) === displayedCurrentPlayer;
+      const glow = playerRoot.children.find((child) => child.name === 'TurnGlow');
+      const indicator = playerRoot.children.find((child) => child.name === 'TurnIndicatorText');
+      if (glow) {
+        glow.active = isCurrent;
+        if (isCurrent) {
+          const pulseScale = this.turnPulseVisible ? 1.04 : 0.98;
+          tween(glow).to(0.4, { scale: new Vec3(pulseScale, pulseScale, 1) }, { easing: 'sineInOut' }).start();
+        } else {
+          glow.setScale(1, 1, 1);
+        }
+      }
+      if (indicator) indicator.active = isCurrent && this.turnPulseVisible;
+    });
+
+    canvas.children
+      .filter((child) => child.name.startsWith('Discard_'))
+      .forEach((discardArea) => {
+        discardArea.children
+          .filter((child) => child.active && child.name.startsWith('DiscardTileGlow'))
+          .forEach((glow) => {
+            const pulseScale = this.turnPulseVisible ? 1.08 : 0.98;
+            tween(glow).to(0.4, { scale: new Vec3(pulseScale, pulseScale, 1) }, { easing: 'sineInOut' }).start();
+          });
+      });
+
+    const actionPanel = canvas.children.find((child) => child.name === 'ActionPanel');
+    const winTargetGlow = actionPanel?.children.find((child) => child.name === 'WinTargetGlow');
+    if (winTargetGlow?.active) {
+      const pulseScale = this.turnPulseVisible ? 1.08 : 0.97;
+      tween(winTargetGlow).to(0.4, { scale: new Vec3(pulseScale, pulseScale, 1) }, { easing: 'sineInOut' }).start();
+    }
+  };
 
   private createCoverImage(parent: Node, name: string, path: string, width: number, height: number, ratio: number): void {
     const screenRatio = width / height;

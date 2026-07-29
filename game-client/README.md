@@ -1,24 +1,40 @@
 # 曲靖飞小鸡 Cocos 微信小游戏客户端
 
-这是新的主前端方向：`Cocos Creator 3.x + TypeScript + 微信小游戏`。
+当前主前端采用 `Cocos Creator 3.8.8 + TypeScript + 微信小游戏`。旧的
+`frontend/` 是普通微信小程序页面实现，仅作为 legacy 参考。
 
-旧的 `frontend/` 是普通微信小程序页面实现，后续仅作为 legacy 参考；新的游戏客户端放在 `game-client/`。
+## 运行状态
 
-## 目标
+- HTTP 与 WebSocket 默认连接 `localhost:3000` 的真实后端。
+- 后端提供权威 `PlayerGameView`、合法动作和胡牌/计分结果。
+- 客户端负责场景、牌桌、交互、动画、音效和动作意图提交，不在本地裁决规则。
+- 已包含 Boot、Login、Lobby、RoomEntry、Room、Game、Result、Replay 八个场景。
+- 牌桌支持单击选牌、再次单击出牌、吃碰杠牌型预览、响应牌提示和结算展示。
+- AI 出牌增加短暂停顿，牌局状态更新采用增量节点复用，减少全屏闪烁。
+- 背景音乐与操作音效支持跨场景播放、淡入淡出和微信前后台恢复。
 
-- 使用 Cocos 场景、组件、Tween、Audio、Asset Bundle 实现游戏式牌桌。
-- 通过 HTTP/WebSocket 对接后端权威 `PlayerGameView`。
-- 客户端只展示和提交动作意图，不做规则裁决。
-- 第一版支持 Mock 跑通：登录 -> 大厅 -> 房间 -> 牌桌 -> 出牌 -> 结算 -> 回放。
-
-## 开发
+## 本地验证
 
 ```bash
+cd game-client
 npm install
 npm run typecheck
 npm test
 ```
 
-在 Cocos Creator 3.x 中打开 `game-client/`，按 `docs/scene_flow.md` 创建/绑定场景与预制体，然后构建目标选择“微信小游戏”。
+启动后端服务后，用 Cocos Creator 3.8.8 打开本目录，从 `Boot.scene`
+运行。发布时在构建面板选择“微信小游戏”，重新构建后再在微信开发者工具中编译。
 
-当前已提供 `assets/scenes/Boot.scene`、`Login.scene`、`Lobby.scene`、`Room.scene`、`Game.scene`、`Result.scene`、`Replay.scene` 七个场景占位，以及 `assets/prefabs/` 下的基础牌桌预制体占位。Mock HTTP/WS 默认开启，可先跑通本地闭环，再替换真实后端。
+后端地址及 Mock 开关位于
+[`assets/scripts/app/AppConfig.ts`](assets/scripts/app/AppConfig.ts)。
+
+## 资源与文档
+
+- 音频授权记录：[`assets/resources/audio/LICENSES.md`](assets/resources/audio/LICENSES.md)
+- 场景流程：[`docs/scene_flow.md`](docs/scene_flow.md)
+- 后端接口契约：[`docs/backend_api_contract.md`](docs/backend_api_contract.md)
+- WebSocket 协议：[`docs/websocket_protocol.md`](docs/websocket_protocol.md)
+- UI 美术提示词：[`docs/ui_asset_generation_prompts.md`](docs/ui_asset_generation_prompts.md)
+
+微信小游戏主包有体积限制。当前短音效与默认 BGM 保留在本地资源中；
+后续增加多首长音乐时应迁移到远程 Asset Bundle 或小游戏分包。

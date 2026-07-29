@@ -24,10 +24,6 @@ export class ResultController extends BaseScene {
     this.resultPanel?.renderResult(view.result);
   }
 
-  openReplay(): void {
-    loadScene('Replay');
-  }
-
   backToLobby(): void {
     loadScene('Lobby');
   }
@@ -40,7 +36,6 @@ export class ResultController extends BaseScene {
       this.resultPanel.titleLabel = createLabel(panelNode, 'TitleLabel', '牌局结束');
       this.resultPanel.detailLabel = createLabel(panelNode, 'DetailLabel', '结算中');
     }
-    createButton(canvas, 'ReplayButton', '查看回放', () => this.openReplay());
     createButton(canvas, 'LobbyButton', '返回大厅', () => this.backToLobby());
   }
 }

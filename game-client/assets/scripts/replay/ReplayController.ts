@@ -2,6 +2,7 @@ import { _decorator, Color, Label, Node, UITransform, Vec3 } from 'cc';
 import { loadScene } from '../app/SceneNavigator';
 import { BaseScene } from '../core/BaseScene';
 import { getTileTexturePath, TILE_BACK_TEXTURE } from '../assets/TileAssetMap';
+import { getDisplayedScores } from '../game/GameManager';
 import type { LocalSeatPosition, PlayerGameView, PlayerPublicView, TileId } from '../game/GameTypes';
 import { getTileLabel } from '../utils/TileUtils';
 import { mockReplay } from '../mock/MockData';
@@ -133,7 +134,8 @@ export class ReplayController extends BaseScene {
     const avatarPosition = this.avatarPosition(config.width, config.height, position);
     createRemoteImage(root, 'Avatar', player.avatarUrl || '', 'textures/ui/default_avatar', avatarSize, avatarSize, avatarPosition);
     this.createText(root, 'Nickname', player.nickname || `${player.seatIndex}号位`, new Vec3(config.width * 0.1, config.height * 0.14, 0), layout.s(position === 'bottom' ? 1.75 : 1.45));
-    this.createText(root, 'Score', `分数 ${view.scores[player.seatIndex] ?? 0}`, new Vec3(config.width * 0.1, -config.height * 0.2, 0), layout.s(position === 'bottom' ? 1.55 : 1.3), new Color(255, 234, 166, 255));
+    const displayedScores = getDisplayedScores(view);
+    this.createText(root, 'Score', `总分 ${displayedScores[player.seatIndex] ?? 0}`, new Vec3(config.width * 0.1, -config.height * 0.2, 0), layout.s(position === 'bottom' ? 1.55 : 1.3), new Color(255, 234, 166, 255));
 
     this.createDiscardArea(parent, layout, position, player.discards);
     this.createMeldArea(parent, layout, position, player.melds.map((meld) => meld.tiles).flat());
