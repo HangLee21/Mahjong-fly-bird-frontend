@@ -2,6 +2,7 @@ import { AppConfig } from '../app/AppConfig';
 import { GameEvents } from '../app/GameEvents';
 import { authManager } from '../auth/AuthManager';
 import { eventBus } from '../core/EventBus';
+import { wsClient } from '../network/WsClient';
 import { roomApi } from './RoomApi';
 import type { RoomPreview, RoomRules, RoomSeat, RoomView, User } from './RoomTypes';
 
@@ -78,14 +79,18 @@ export class RoomManager {
 
   async leaveRoom(): Promise<RoomView | null> {
     if (!this.currentRoom) return null;
+    const roomIds = [this.currentRoom.roomId, this.currentRoom.internalRoomId]
+      .filter((roomId): roomId is string => Boolean(roomId));
     if (AppConfig.USE_MOCK_HTTP) {
       const room = this.leaveLocalRoom();
       this.currentRoom = null;
+      roomIds.forEach((roomId) => wsClient.unsubscribeRoom(roomId));
       return room;
     }
 
     const room = this.unwrapRoom(await roomApi.leaveRoom(this.currentRoom.roomId));
     this.currentRoom = null;
+    roomIds.forEach((roomId) => wsClient.unsubscribeRoom(roomId));
     return room;
   }
 
@@ -112,6 +117,10 @@ export class RoomManager {
 
   setRoom(room: RoomView): void {
     this.currentRoom = room;
+    wsClient.connect();
+    [room.roomId, room.internalRoomId]
+      .filter((roomId): roomId is string => Boolean(roomId))
+      .forEach((roomId) => wsClient.subscribeRoom(roomId));
     eventBus.emit(GameEvents.ROOM_CHANGED, room);
   }
 

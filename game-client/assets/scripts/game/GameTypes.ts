@@ -29,6 +29,8 @@ export interface ClientAction extends GameAction {
 export interface Meld {
   type: 'CHOW' | 'PONG' | 'KONG_EXPOSED' | 'KONG_CONCEALED' | 'KONG_ADDED';
   tiles: TileId[];
+  /** Index in `tiles` of the tile claimed from another player's discard. */
+  claimedIndex?: number;
   fromPlayer?: number;
   stepIndex: number;
   containsXiaoJiAsWild?: boolean;

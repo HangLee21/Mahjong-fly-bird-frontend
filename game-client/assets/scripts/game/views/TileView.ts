@@ -39,6 +39,11 @@ export class TileView extends Component {
     this.node.name = disabled ? `${this.node.name || 'Tile'}_disabled` : this.node.name || 'Tile';
   }
 
+  /** Rotates the tile 90 degrees to mark it as claimed from another player. */
+  setSideways(sideways: boolean): void {
+    this.node.angle = sideways ? 90 : 0;
+  }
+
   playSelectAnimation(): void {
     tween(this.node).to(0.12, { position: new Vec3(this.node.position.x, 14, this.node.position.z) }).start();
   }

@@ -1,11 +1,13 @@
-import { _decorator, Color, Node } from 'cc';
+import { _decorator, Color, Layers, Node } from 'cc';
 import { AppConfig } from '../app/AppConfig';
 import { loadScene } from '../app/SceneNavigator';
 import { authManager } from '../auth/AuthManager';
 import { BaseScene } from '../core/BaseScene';
 import { httpClient } from '../network/HttpClient';
 import { ApiRoutes } from '../network/ApiRoutes';
-import { applyLandscapeResolution, createImage, createLayout, createPanel, ensureCanvas } from '../ui/RuntimeUi';
+import { preloadGameResources, preloadLoadingAssets } from '../assets/ResourcePreloader';
+import { applyLandscapeResolution, createImage, createLayout, createPanel, ensureCanvas, ensureComponent } from '../ui/RuntimeUi';
+import { LoadingOverlay } from '../ui/LoadingOverlay';
 import { Storage } from '../utils/Storage';
 import { bgmManager } from '../audio/BgmManager';
 
@@ -30,9 +32,46 @@ export class BootController extends BaseScene {
   async enter(): Promise<void> {
     await super.enter();
     this.buildRuntimeUi();
+    const overlay = this.createLoadingOverlay();
+    await this.preloadLoadingStage(overlay);
+    await this.preloadWithProgress(overlay);
     const nextScene = await this.resolveNextScene();
     console.log(`[BootController] next scene: ${nextScene}`);
+    overlay.hide();
     setTimeout(() => loadScene(nextScene), 350);
+  }
+
+  private createLoadingOverlay(): LoadingOverlay {
+    const canvas = ensureCanvas(this.node);
+    const node = new Node('LoadingOverlay');
+    node.layer = Layers.Enum.UI_2D;
+    canvas.addChild(node);
+    const overlay = ensureComponent(node, LoadingOverlay);
+    overlay.build(createLayout());
+    return overlay;
+  }
+
+  private async preloadWithProgress(overlay: LoadingOverlay): Promise<void> {
+    for (;;) {
+      try {
+        await preloadGameResources((finished, total) => overlay.setProgress(finished, total));
+        return;
+      } catch (err) {
+        console.warn('[BootController] resource preload failed; waiting for retry', err);
+        overlay.showError('资源加载失败，请检查网络后重试');
+        await overlay.waitForRetry();
+      }
+    }
+  }
+
+  private async preloadLoadingStage(overlay: LoadingOverlay): Promise<void> {
+    try {
+      await preloadLoadingAssets((finished, total) => overlay.setProgress(finished, total));
+      overlay.useLoadedAssets();
+    } catch (err) {
+      console.warn('[BootController] loading-page assets unavailable, keep code-drawn fallback', err);
+    }
+    overlay.showLoadingPhase();
   }
 
   private async resolveNextScene(): Promise<'Lobby' | 'Login'> {

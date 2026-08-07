@@ -30,19 +30,27 @@ export class WsClient {
   private reconnectPolicy = new ReconnectPolicy();
   private roomIds = new Set<string>();
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private manuallyDisconnected = false;
 
   connect(): void {
     const token = Storage.getToken();
     if (!token || this.status === 'CONNECTED' || this.status === 'CONNECTING') return;
+    this.manuallyDisconnected = false;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
     this.setStatus(this.status === 'IDLE' ? 'CONNECTING' : 'RECONNECTING');
     const url = `${AppConfig.WS_BASE_URL}?token=${encodeURIComponent(token)}`;
     const wxApi = (globalThis as unknown as { wx?: WxSocketApi }).wx;
     if (typeof WebSocket === 'function') {
-      this.socket = new WebSocket(url);
-      this.socket.onopen = () => this.handleOpen();
-      this.socket.onmessage = (event) => this.dispatch(JSON.parse(String(event.data)) as WsMessage);
-      this.socket.onerror = () => this.handleClose('ERROR');
-      this.socket.onclose = () => this.handleClose('DISCONNECTED');
+      const socket = new WebSocket(url);
+      this.socket = socket;
+      socket.onopen = () => {
+        if (this.socket === socket) this.handleOpen();
+      };
+      socket.onmessage = (event) => this.handleMessage(event.data);
+      socket.onerror = () => this.handleClose('ERROR', socket);
+      socket.onclose = () => this.handleClose('DISCONNECTED', socket);
       return;
     }
 
@@ -51,14 +59,19 @@ export class WsClient {
       return;
     }
 
-    this.wxSocket = wxApi.connectSocket({ url });
-    this.wxSocket.onOpen(() => this.handleOpen());
-    this.wxSocket.onMessage((event) => this.dispatch(JSON.parse(String(event.data)) as WsMessage));
-    this.wxSocket.onError(() => this.handleClose('ERROR'));
-    this.wxSocket.onClose(() => this.handleClose('DISCONNECTED'));
+    const socket = wxApi.connectSocket({ url });
+    this.wxSocket = socket;
+    socket.onOpen(() => {
+      if (this.wxSocket === socket) this.handleOpen();
+    });
+    socket.onMessage((event) => this.handleMessage(event.data));
+    socket.onError(() => this.handleClose('ERROR', socket));
+    socket.onClose(() => this.handleClose('DISCONNECTED', socket));
   }
 
   private handleOpen(): void {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
     this.reconnectPolicy.reset();
     this.setStatus('CONNECTED');
     [...this.roomIds].forEach((roomId) => this.sendRoomSubscribe(roomId));
@@ -66,11 +79,16 @@ export class WsClient {
   }
 
   disconnect(): void {
+    this.manuallyDisconnected = true;
     this.stopHeartbeat();
-    this.socket?.close();
-    this.wxSocket?.close();
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    const socket = this.socket;
+    const wxSocket = this.wxSocket;
     this.socket = null;
     this.wxSocket = null;
+    socket?.close();
+    wxSocket?.close();
     this.setStatus('DISCONNECTED');
   }
 
@@ -102,8 +120,13 @@ export class WsClient {
 
   subscribeRoom(roomId: string): void {
     if (!roomId) return;
+    if (this.roomIds.has(roomId)) return;
     this.roomIds.add(roomId);
     if (this.status === 'CONNECTED') this.sendRoomSubscribe(roomId);
+  }
+
+  unsubscribeRoom(roomId: string): void {
+    this.roomIds.delete(roomId);
   }
 
   private sendRoomSubscribe(roomId: string): void {
@@ -115,19 +138,32 @@ export class WsClient {
     this.listeners.get('*')?.forEach((handler) => handler(message));
   }
 
-  private handleClose(status: WsStatus): void {
+  private handleMessage(data: string | ArrayBuffer): void {
+    try {
+      this.dispatch(JSON.parse(String(data)) as WsMessage);
+    } catch (error) {
+      console.warn('[WsClient] ignored malformed websocket message', error);
+    }
+  }
+
+  private handleClose(status: WsStatus, source?: WebSocket | SocketLike): void {
+    if (source && source !== this.socket && source !== this.wxSocket) return;
     this.stopHeartbeat();
     this.socket = null;
     this.wxSocket = null;
     this.setStatus(status);
+    if (this.manuallyDisconnected || this.reconnectTimer) return;
     const delay = this.reconnectPolicy.nextDelay();
-    setTimeout(() => this.connect(), delay);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect();
+    }, delay);
   }
 
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
-      if (this.socket?.readyState === WebSocket.OPEN || this.wxSocket) this.send({ type: 'PING' });
+      if (this.socket?.readyState === 1 || this.wxSocket) this.send({ type: 'PING' });
     }, AppConfig.WS_HEARTBEAT_INTERVAL_MS);
   }
 

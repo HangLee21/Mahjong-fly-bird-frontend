@@ -6,8 +6,9 @@ test('maps tiles for qujing mahjong', () => {
   expect(isXiaoJi(18)).toBe(true);
 });
 
-test('sorts tiles', () => {
-  expect(sortTiles([18, 0, 9])).toEqual([0, 9, 18]);
+test('sorts tiles with the xiaoji chick first', () => {
+  expect(sortTiles([18, 0, 9])).toEqual([18, 0, 9]);
+  expect(sortTiles([19, 18, 0, 9, 27])).toEqual([18, 0, 9, 19, 27]);
 });
 
 test('maps seats to local positions', () => {

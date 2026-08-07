@@ -15,7 +15,12 @@ export function isXiaoJi(tile: TileId): boolean {
 }
 
 export function sortTiles(tiles: TileId[]): TileId[] {
-  return [...tiles].sort((a, b) => a - b);
+  return [...tiles].sort((a, b) => {
+    const aIsXiaoJi = a === XIAO_JI_TILE_ID ? 1 : 0;
+    const bIsXiaoJi = b === XIAO_JI_TILE_ID ? 1 : 0;
+    if (aIsXiaoJi !== bIsXiaoJi) return bIsXiaoJi - aIsXiaoJi;
+    return a - b;
+  });
 }
 
 export function mapSeatToLocalPosition(selfIndex: number, targetIndex: number): LocalSeatPosition {

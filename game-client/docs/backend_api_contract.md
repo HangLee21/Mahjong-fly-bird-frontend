@@ -132,7 +132,7 @@ token 无效：
   "minClientVersion": "0.1.0",
   "rulePreset": "qujing-fei-xiao-ji-v1.5",
   "assetVersion": "2026.05.27",
-  "wsUrl": "ws://localhost:3000/ws",
+  "wsUrl": "wss://flybirdmahjong.fun/ws",
   "notice": "欢迎体验曲靖飞小鸡"
 }
 ```

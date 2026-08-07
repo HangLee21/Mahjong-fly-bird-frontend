@@ -4,6 +4,7 @@ declare module 'cc' {
     schedule?(callback: () => void, interval?: number): void;
     scheduleOnce?(callback: () => void, delay?: number): void;
     unschedule?(callback: () => void): void;
+    update?(dt: number): void;
   }
   export class Node {
     constructor(name?: string);
@@ -14,6 +15,7 @@ declare module 'cc' {
     parent: Node | null;
     position: Vec3;
     scale: Vec3;
+    angle: number;
     setPosition(x: number | Vec3, y?: number, z?: number): void;
     setScale(x: number | Vec3, y?: number, z?: number): void;
     addChild(node: Node): void;
@@ -32,7 +34,7 @@ declare module 'cc' {
     color: Color;
     sizeMode: number;
   }
-  export class Label { string: string; color: Color; fontSize: number; lineHeight: number; }
+  export class Label extends Component { string: string; color: Color; fontSize: number; lineHeight: number; }
   export class Button {}
   export class Color { constructor(r?: number, g?: number, b?: number, a?: number); static WHITE: Color; static BLACK: Color; }
   export class Camera {
@@ -58,6 +60,28 @@ declare module 'cc' {
   export class Vec3 { constructor(x?: number, y?: number, z?: number); x: number; y: number; z: number; static ZERO: Vec3; }
   export class Size { constructor(width?: number, height?: number); width: number; height: number; }
   export class UITransform { width: number; height: number; setContentSize(width: number, height: number): void; }
+  export class Graphics extends Component {
+    fillColor: Color;
+    strokeColor: Color;
+    lineWidth: number;
+    moveTo(x: number, y: number): void;
+    lineTo(x: number, y: number): void;
+    arc(cx: number, cy: number, r: number, startAngle: number, endAngle: number, counterclockwise?: boolean): void;
+    circle(cx: number, cy: number, r: number): void;
+    rect(x: number, y: number, w: number, h: number): void;
+    roundRect(x: number, y: number, w: number, h: number, r: number): void;
+    close(): void;
+    stroke(): void;
+    fill(): void;
+    clear(): void;
+  }
+  export interface AssetBundle {
+    loadDir(
+      path: string,
+      onProgress: (finished: number, total: number, item: unknown) => void,
+      onComplete: (err: Error | null, assets: unknown[]) => void,
+    ): void;
+  }
   export class View { getVisibleSize(): Size; getDesignResolutionSize(): Size; }
   export class EventTarget { on(type: string, callback: (...args: never[]) => void, target?: unknown): void; off(type: string, callback: (...args: never[]) => void, target?: unknown): void; emit(type: string, ...args: unknown[]): void; }
   export const _decorator: {

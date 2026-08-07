@@ -4,22 +4,33 @@ import { eventBus } from '../core/EventBus';
 import { Storage } from '../utils/Storage';
 import { authApi } from './AuthApi';
 import type { User } from '../room/RoomTypes';
+import { isWechatMiniGame, requestWechatLoginCode } from '../platform/WechatPlatform';
+import { HttpRequestError } from '../network/HttpClient';
 
 export class AuthManager {
   token: string | null = Storage.getToken();
   user: User | null = Storage.getUser();
 
-  async mockLogin(): Promise<void> {
-    if (!AppConfig.USE_MOCK_HTTP) {
-      await this.wechatLogin('dev_user', '测试玩家', '');
+  async login(): Promise<void> {
+    if (AppConfig.USE_MOCK_HTTP) {
+      this.token = 'mock-token';
+      this.user = { id: 'u_001', nickname: '游客' };
+      Storage.setToken(this.token);
+      Storage.setUser(this.user);
+      eventBus.emit(GameEvents.AUTH_CHANGED, this.snapshot());
       return;
     }
 
-    this.token = 'mock-token';
-    this.user = { id: 'u_001', nickname: '游客' };
-    Storage.setToken(this.token);
-    Storage.setUser(this.user);
-    eventBus.emit(GameEvents.AUTH_CHANGED, this.snapshot());
+    if (isWechatMiniGame()) {
+      await this.loginWithFreshWechatCode();
+      return;
+    }
+
+    throw new Error('体验版登录必须在微信开发者工具或微信真机环境中运行');
+  }
+
+  async mockLogin(): Promise<void> {
+    await this.login();
   }
 
   async restoreSession(): Promise<boolean> {
@@ -43,6 +54,20 @@ export class AuthManager {
     Storage.setToken(result.token);
     Storage.setUser(result.user);
     eventBus.emit(GameEvents.AUTH_CHANGED, this.snapshot());
+  }
+
+  private async loginWithFreshWechatCode(): Promise<void> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const code = await requestWechatLoginCode();
+      try {
+        await this.wechatLogin(code, '微信玩家', '');
+        return;
+      } catch (error) {
+        if (!(error instanceof HttpRequestError) || error.status !== 401 || attempt > 0) throw error;
+        console.warn('[AuthManager] WeChat code was rejected; requesting a fresh code once');
+      }
+    }
+    throw new Error('微信登录失败');
   }
 
   logout(): void {

@@ -9,15 +9,37 @@ interface HttpResult {
   body: unknown;
 }
 
+export class HttpRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: unknown,
+  ) {
+    super(message);
+    this.name = 'HttpRequestError';
+  }
+}
+
 interface WxRequestApi {
   request(options: {
     url: string;
     method: 'GET' | 'POST';
     header?: Record<string, string>;
     data?: unknown;
+    timeout?: number;
     success?: (result: { statusCode: number; data: unknown }) => void;
     fail?: (error: { errMsg?: string }) => void;
   }): void;
+}
+
+function responseMessage(body: unknown, fallback: string): string {
+  if (typeof body === 'object' && body !== null) {
+    const message = (body as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+    const error = (body as { error?: unknown }).error;
+    if (typeof error === 'string' && error.trim()) return error;
+  }
+  return fallback;
 }
 
 export class HttpClient {
@@ -30,9 +52,16 @@ export class HttpClient {
     const response = await this.send(`${AppConfig.API_BASE_URL}${path}`, method, headers, data);
     if (response.status === 401) {
       Storage.clearSession();
-      throw new Error('登录已过期');
+      const fallback = path === '/auth/wechat-login' ? '微信登录失败' : '登录已过期';
+      throw new HttpRequestError(responseMessage(response.body, fallback), response.status, response.body);
     }
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      throw new HttpRequestError(
+        responseMessage(response.body, `服务器请求失败（HTTP ${response.status}）`),
+        response.status,
+        response.body,
+      );
+    }
     const body = response.body as ApiResponse<T> | T;
     if (typeof body === 'object' && body !== null && 'code' in body) {
       const apiBody = body as ApiResponse<T>;
@@ -57,10 +86,19 @@ export class HttpClient {
         headers,
         body: data === undefined ? undefined : JSON.stringify(data),
       });
+      const text = await response.text();
+      let body: unknown = text;
+      if (text) {
+        try {
+          body = JSON.parse(text);
+        } catch {
+          // Keep the response text so gateway and proxy errors remain readable.
+        }
+      }
       return {
         status: response.status,
         ok: response.ok,
-        body: await response.json(),
+        body,
       };
     }
 
@@ -73,6 +111,7 @@ export class HttpClient {
         method,
         header: headers,
         data,
+        timeout: 15000,
         success: (result) => {
           const status = result.statusCode;
           resolve({

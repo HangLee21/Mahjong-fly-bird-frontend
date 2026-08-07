@@ -33,3 +33,7 @@ npm test
 用 Cocos Creator 3.8.8 打开 `game-client/`，从 `Boot.scene` 运行，
 构建目标选择“微信小游戏”。详细状态和资源授权见
 [`game-client/README.md`](game-client/README.md)。
+
+微信小游戏体验版使用 AppID `wx67f006b9a7827b2a`，真实登录、HTTPS/WSS
+和远程资源构建步骤见
+[`game-client/docs/wechat_experience_testing.md`](game-client/docs/wechat_experience_testing.md)。

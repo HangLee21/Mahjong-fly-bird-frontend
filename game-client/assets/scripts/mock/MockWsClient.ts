@@ -66,6 +66,10 @@ export class MockWsClient {
     this.send({ type: 'ROOM_SUBSCRIBE', roomId });
   }
 
+  unsubscribeRoom(roomId: string): void {
+    if (this.roomId === roomId) this.roomId = null;
+  }
+
   private dispatch(message: WsMessage): void {
     this.listeners.get(message.type)?.forEach((handler) => handler(message));
     this.listeners.get('*')?.forEach((handler) => handler(message));

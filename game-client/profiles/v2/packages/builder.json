@@ -8,21 +8,21 @@
       "1779436459472": {
         "type": "build",
         "id": "1779436459472",
-        "progress": 0.09545454545454546,
-        "state": "processing",
+        "progress": 1,
+        "state": "success",
         "stage": "build",
-        "message": "Build engine start...",
-        "detailMessage": "[buildEngineCommand]Module source \"cc\":\rexport * from 'E:\\\\cocos-creator\\\\Creator\\\\3.8.8\\\\resources\\\\resources\\\\3d\\\\engine\\\\exports\\\\2d.ts';\rexport * from 'E:\\\\cocos-creator\\\\Creator\\\\3.8.8\\\\resources...",
+        "message": "2026-8-7 16:36:10 build -> run success in 22 s!",
+        "detailMessage": "Asset DB is resume!\r",
         "options": {
           "name": "qujing-mahjong-game-client",
-          "server": "",
-          "engineModulesConfigKey": "defaultConfig",
+          "server": "https://flybirdmahjong.fun/game-assets/",
+          "engineModulesConfigKey": "wechatExperience",
           "platform": "wechatgame",
           "buildPath": "project://build",
           "debug": false,
           "buildMode": "normal",
           "mangleProperties": false,
-          "md5Cache": false,
+          "md5Cache": true,
           "skipCompressTexture": false,
           "sourceMaps": false,
           "overwriteProjectSettings": {
@@ -40,7 +40,7 @@
             "asyncFunctions": false
           },
           "experimentalEraseModules": false,
-          "startSceneAssetBundle": false,
+          "startSceneAssetBundle": true,
           "bundleConfigs": [],
           "inlineEnum": true,
           "useBuiltinServer": false,
@@ -52,7 +52,7 @@
           },
           "mainBundleIsRemote": false,
           "mainBundleCompressionType": "merge_dep",
-          "useSplashScreen": true,
+          "useSplashScreen": false,
           "bundleCommonChunk": false,
           "packAutoAtlas": true,
           "startScene": "7ad1f19b-f99a-4a65-9cfa-0f69f8e27c71",
@@ -106,7 +106,7 @@
             ]
           }
         },
-        "time": "2026-6-1 11:31:20",
+        "time": "2026-8-7 16:35:48",
         "dirty": false
       }
     }
