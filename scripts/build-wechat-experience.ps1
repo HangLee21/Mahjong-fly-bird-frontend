@@ -203,6 +203,14 @@ foreach ($requiredGameFile in @('game.js', 'game.json')) {
     }
 }
 
+$gameIcon = Join-Path $projectRoot 'icon\game_icon_144.png'
+if (Test-Path -LiteralPath $gameIcon -PathType Leaf) {
+    Copy-Item -LiteralPath $gameIcon -Destination (Join-Path $buildRoot 'logo.png') -Force
+    Write-Host 'Replaced WeChat loading logo with the game icon.'
+} else {
+    Write-Host 'Game icon not found; keeping the default WeChat loading logo.'
+}
+
 Write-Host ('Local package: {0:N2} MiB' -f ($localBytes / 1MB))
 Write-Host ('Remote assets: {0:N2} MiB' -f ($remoteBytes / 1MB))
 Write-Host "Build output: $buildRoot"
