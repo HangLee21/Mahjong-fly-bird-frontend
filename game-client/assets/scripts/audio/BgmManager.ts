@@ -1,17 +1,32 @@
 import { AudioClip, AudioSource, director, game, Game, input, Input, Node, resources, sys } from 'cc';
 import { AudioConfig, BgmTrack } from './AudioConfig';
 
+interface WxInnerAudioContext {
+  src: string;
+  loop: boolean;
+  volume: number;
+  play(): void;
+  pause(): void;
+  stop(): void;
+  destroy(): void;
+  onError?(callback: (error: unknown) => void): void;
+  onEnded?(callback: () => void): void;
+}
+
 const FADE_FRAME_MS = 32;
 
 class BgmManager {
   private root: Node | null = null;
   private source: AudioSource | null = null;
+  private wxContext: WxInnerAudioContext | null = null;
   private currentTrack: BgmTrack | null = null;
   private requestId = 0;
   private fadeTimer: ReturnType<typeof setInterval> | null = null;
   private muted = false;
   private volumeScale = 1;
   private pausedByLifecycle = false;
+  private gestureUnlocked = false;
+  private readonly clips = new Map<BgmTrack, AudioClip>();
 
   initialize(sceneRoot: Node): void {
     if (this.root) return;
@@ -44,26 +59,35 @@ class BgmManager {
   }
 
   async play(track: BgmTrack): Promise<void> {
-    const source = this.source;
-    if (!AudioConfig.bgm.enabled || !source) return;
-    if (this.currentTrack === track && source.playing) {
-      this.fadeTo(this.targetVolume(track), AudioConfig.bgm.fadeInSeconds);
+    if (!AudioConfig.bgm.enabled) return;
+    const requestId = ++this.requestId;
+    const config = AudioConfig.tracks[track];
+    const cached = this.clips.get(track);
+    const clip = cached ?? await this.loadClip(config.resourcePath);
+    if (!clip || requestId !== this.requestId) return;
+    this.clips.set(track, clip);
+    this.currentTrack = track;
+    this.pausedByLifecycle = false;
+
+    const wxContext = this.wxContext ?? this.tryCreateWxContext();
+    const url = (clip as unknown as { nativeUrl?: string }).nativeUrl || '';
+    if (wxContext && url) {
+      wxContext.loop = config.loop;
+      wxContext.src = url;
+      wxContext.volume = this.targetVolume(track);
+      wxContext.play();
+      console.log(`[BgmManager] wx BGM started: ${track}`);
       return;
     }
 
-    const requestId = ++this.requestId;
-    const config = AudioConfig.tracks[track];
-    const clip = await this.loadClip(config.resourcePath);
-    if (!clip || requestId !== this.requestId || this.source !== source) return;
-
+    const source = this.source;
+    if (!source) return;
     this.stopFade();
     source.stop();
     source.clip = clip;
     source.loop = config.loop;
     source.volume = 0;
     source.play();
-    this.currentTrack = track;
-    this.pausedByLifecycle = false;
     this.fadeTo(this.targetVolume(track), AudioConfig.bgm.fadeInSeconds);
     console.log(`[BgmManager] play requested: ${track}, targetVolume=${this.targetVolume(track)}`);
     setTimeout(() => {
@@ -77,13 +101,17 @@ class BgmManager {
   }
 
   stop(): void {
+    ++this.requestId;
+    this.currentTrack = null;
+    if (this.wxContext) {
+      this.wxContext.stop();
+      return;
+    }
     const source = this.source;
     if (!source) return;
-    ++this.requestId;
     this.fadeTo(0, AudioConfig.bgm.fadeOutSeconds, () => {
       source.stop();
       source.clip = null;
-      this.currentTrack = null;
     });
   }
 
@@ -108,6 +136,10 @@ class BgmManager {
   }
 
   resume(): void {
+    if (this.wxContext) {
+      this.wxContext.play();
+      return;
+    }
     const source = this.source;
     if (!source?.clip || source.playing) return;
     source.play();
@@ -116,17 +148,45 @@ class BgmManager {
 
   unlockFromGesture(): void {
     if (!AudioConfig.bgm.enabled || this.muted) return;
+    if (this.wxContext) {
+      if (!this.gestureUnlocked) {
+        this.gestureUnlocked = true;
+        this.wxContext.play();
+        console.log('[BgmManager] wx BGM unlocked by user interaction');
+      }
+      return;
+    }
+
     const source = this.source;
     if (!source?.clip) {
       void this.play(AudioConfig.bgm.defaultTrack);
       return;
     }
-    if (source.playing) return;
+    if (this.gestureUnlocked) {
+      if (!source.playing) source.play();
+      return;
+    }
+    this.gestureUnlocked = true;
+    // The boot autoplay may have been silently suspended by the platform until
+    // the first user interaction, so force a clean restart on the first gesture.
+    source.stop();
     source.play();
     const track = this.currentTrack || AudioConfig.bgm.defaultTrack;
     this.currentTrack = track;
     this.fadeTo(this.targetVolume(track), 0.25);
     console.log(`[BgmManager] playback unlocked by user interaction: ${track}`);
+  }
+
+  private tryCreateWxContext(): WxInnerAudioContext | null {
+    const api = (globalThis as { wx?: { createInnerAudioContext?: () => WxInnerAudioContext } }).wx;
+    if (!api?.createInnerAudioContext) return null;
+    const context = api.createInnerAudioContext();
+    context.onError?.((error) => console.warn('[BgmManager] inner audio error', error));
+    context.onEnded?.(() => {
+      if (this.wxContext === context) context.play();
+    });
+    this.wxContext = context;
+    return context;
   }
 
   private loadClip(path: string): Promise<AudioClip | null> {
@@ -143,8 +203,13 @@ class BgmManager {
   }
 
   private refreshVolume(): void {
-    if (!this.currentTrack) return;
-    this.fadeTo(this.targetVolume(this.currentTrack), 0.15);
+    const track = this.currentTrack;
+    if (!track) return;
+    if (this.wxContext) {
+      this.wxContext.volume = this.targetVolume(track);
+      return;
+    }
+    this.fadeTo(this.targetVolume(track), 0.15);
   }
 
   private targetVolume(track: BgmTrack): number {
@@ -197,11 +262,15 @@ class BgmManager {
   }
 
   private readonly handleHide = (): void => {
+    this.pausedByLifecycle = true;
+    if (this.wxContext) {
+      this.wxContext.pause();
+      return;
+    }
     const source = this.source;
     if (!source?.playing) return;
     this.stopFade();
     source.pause();
-    this.pausedByLifecycle = true;
   };
 
   private readonly handleShow = (): void => {

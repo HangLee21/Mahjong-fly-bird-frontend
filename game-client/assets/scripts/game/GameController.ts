@@ -75,6 +75,16 @@ const MELD_ACTION_TYPES = new Set<ActionType>([
   'KONG_ADDED',
 ]);
 
+// Response melds are rendered in the compact tile-preview panel; self-turn kongs
+// (KONG_CONCEALED / KONG_ADDED) stay in the action button panel instead.
+const RESPONSE_MELD_TYPES = new Set<ActionType>([
+  'PONG',
+  'CHOW_LEFT',
+  'CHOW_MIDDLE',
+  'CHOW_RIGHT',
+  'KONG_EXPOSED',
+]);
+
 const GAME_BG_RATIO = 1672 / 941;
 const PLAYER_PANEL_RATIO_SELF = 330 / 110;
 const PLAYER_PANEL_RATIO_OTHER = 260 / 96;
@@ -486,7 +496,7 @@ export class GameController extends BaseScene {
       if (child.name.startsWith('Action_')) child.active = false;
     });
     const visibleActions = actions
-      .filter((action) => action.type !== 'DISCARD' && action.type !== 'SELECT_KONG_TILE' && !MELD_ACTION_TYPES.has(action.type))
+      .filter((action) => action.type !== 'DISCARD' && action.type !== 'SELECT_KONG_TILE' && !RESPONSE_MELD_TYPES.has(action.type))
       .sort((a, b) => ACTION_ORDER.indexOf(a.type) - ACTION_ORDER.indexOf(b.type));
     panel.active = visibleActions.length > 0;
     if (visibleActions.length === 0) {
