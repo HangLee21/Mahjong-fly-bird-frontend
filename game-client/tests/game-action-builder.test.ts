@@ -1,4 +1,9 @@
-import { buildClientAction, findDiscardAction, getActionPreviewTiles } from '../assets/scripts/game/GameActionBuilder';
+import {
+  buildClientAction,
+  findDiscardAction,
+  getActionPreviewTiles,
+  getKongPreviewTiles,
+} from '../assets/scripts/game/GameActionBuilder';
 import { mockGameView } from '../assets/scripts/mock/MockData';
 
 test('finds discard action from backend legal actions', () => {
@@ -35,4 +40,18 @@ test('does not build fallback discard while another backend action is pending', 
     legalActions: [{ type: 'PONG' as const, tile: 18, actionId: 102 }],
   };
   expect(findDiscardAction(view, 18)).toBeNull();
+});
+
+test('kong previews mirror the backend wild composition rules', () => {
+  // 3 real + 1 chick -> three identical tiles plus the chick.
+  expect(getKongPreviewTiles({ type: 'KONG_CONCEALED', tile: 5, actionId: 107 }, [5, 5, 5, 18], true)).toEqual([5, 5, 5, 18]);
+  // 2 real + 2 chicks -> two identical tiles plus two chicks.
+  expect(getKongPreviewTiles({ type: 'KONG_CONCEALED', tile: 5, actionId: 107 }, [5, 5, 18, 18], true)).toEqual([5, 5, 18, 18]);
+  // 4 real -> four identical tiles even when chicks are wild.
+  expect(getKongPreviewTiles({ type: 'KONG_CONCEALED', tile: 5, actionId: 107 }, [5, 5, 5, 5], true)).toEqual([5, 5, 5, 5]);
+  // Exposed kong: 2 real + chick, the discarded tile completes the four.
+  expect(getKongPreviewTiles({ type: 'KONG_EXPOSED', tile: 5, actionId: 106 }, [5, 5, 18], true)).toEqual([5, 5, 5, 18]);
+  // Added kong upgrades a pong with a chick.
+  expect(getKongPreviewTiles({ type: 'KONG_ADDED', tile: 5, actionId: 108 }, [18], true)).toEqual([18]);
+  expect(getKongPreviewTiles({ type: 'KONG_ADDED', tile: 5, actionId: 108 }, [5], true)).toEqual([5]);
 });

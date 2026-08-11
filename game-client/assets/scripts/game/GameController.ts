@@ -1,11 +1,13 @@
 import { _decorator, Color, Label, Node, Sprite, tween, UITransform, Vec3 } from 'cc';
 import { loadScene } from '../app/SceneNavigator';
+import { ActionLabels } from '../app/Constants';
 import { GameEvents } from '../app/GameEvents';
 import { BaseScene } from '../core/BaseScene';
 import { eventBus } from '../core/EventBus';
 import { mockGameView } from '../mock/MockData';
 import { roomManager } from '../room/RoomManager';
 import { gameAudio } from '../audio/GameAudio';
+import { bgmManager } from '../audio/BgmManager';
 import {
   applyLandscapeResolution,
   bindTouchEnd,
@@ -21,8 +23,8 @@ import {
   RuntimeLayout,
 } from '../ui/RuntimeUi';
 import { getTileTexturePath, TILE_BACK_TEXTURE } from '../assets/TileAssetMap';
-import { getTileLabel } from '../utils/TileUtils';
-import { getActionPreviewTiles } from './GameActionBuilder';
+import { getTileLabel, sortTiles } from '../utils/TileUtils';
+import { getActionPreviewTiles, getKongPreviewTiles } from './GameActionBuilder';
 import { gameManager, getDisplayedScores } from './GameManager';
 import type { ActionType, GameAction, LocalSeatPosition, PlayerGameView, PlayerPublicView, ScoreResult, TileId } from './GameTypes';
 
@@ -104,6 +106,7 @@ export class GameController extends BaseScene {
     console.log('[GameController] start');
     applyLandscapeResolution();
     gameAudio.attach(this.node);
+    void bgmManager.play('tableAmbient');
     await this.enter();
     const room = roomManager.currentRoom;
     const roomId = room?.roomId || mockGameView.roomId;
@@ -156,12 +159,9 @@ export class GameController extends BaseScene {
       this.lastAudioRoundKey = audioRoundKey;
       playRoundOpening = continuingFromPreviousRound || view.stepIndex <= 4;
     }
-    if (
-      view.status === 'FINISHED'
-      && this.lastAudioStatus !== 'FINISHED'
-      && Boolean(view.result?.winnerIndexes.includes(view.playerIndex))
-    ) {
-      gameAudio.play('win', 0.7);
+    if (view.status === 'FINISHED' && this.lastAudioStatus !== 'FINISHED') {
+      const selfWon = Boolean(view.result?.winnerIndexes.includes(view.playerIndex));
+      gameAudio.play(selfWon ? 'win' : 'winOthers', selfWon ? 0.7 : 0.55);
     }
     this.lastAudioStatus = view.status;
 
@@ -174,7 +174,7 @@ export class GameController extends BaseScene {
     this.createPlayers(canvas, layout, view, displayedCurrentPlayer, snapshot.presentationAiSeat);
     this.createSelfHand(canvas, layout, view, snapshot.submitting ? [] : snapshot.legalDiscardTiles);
     this.createActionPanel(canvas, layout, view, snapshot.submitting);
-    this.createMeldActionChoices(canvas, layout, view.legalActions, snapshot.submitting);
+    this.createMeldActionChoices(canvas, layout, view.legalActions, view, snapshot.submitting);
     this.createKongTileChoice(canvas, layout, view.legalActions, snapshot.submitting);
     this.createResponseHint(canvas, layout, view);
     if (playRoundOpening) this.playRoundOpeningAnimation(canvas, layout, view);
@@ -408,23 +408,29 @@ export class GameController extends BaseScene {
 
     const legal = new Set(legalDiscardTiles);
     const canDiscard = legalDiscardTiles.length > 0;
-    const sorted = [...view.self.hand].sort((a, b) => a - b);
+    const sorted = sortTiles(view.self.hand);
+    const meldHint = this.meldHandHint(view);
     const tileW = layout.w(3.0);
     const tileH = tileW * 1.36;
     const gap = tileW * 0.8;
     sorted.forEach((tile, index) => {
       const isSelected = this.selectedHandIndex === index && this.lastTapTile === tile;
+      const isMeldHint = meldHint.has(tile);
       const node = this.createTile(
         handArea,
         `SelfTile${index}`,
         tile,
-        new Vec3((index - (sorted.length - 1) / 2) * gap, isSelected ? tileH * 0.28 : 0, 0),
+        new Vec3((index - (sorted.length - 1) / 2) * gap, isSelected ? tileH * 0.28 : isMeldHint ? tileH * 0.16 : 0, 0),
         tileW,
         tileH,
       );
       node.active = true;
       const tileSprite = ensureComponent(ensureChild(node, 'TileImage'), Sprite);
-      tileSprite.color = isSelected ? new Color(255, 235, 145, 255) : Color.WHITE;
+      tileSprite.color = isSelected
+        ? new Color(255, 235, 145, 255)
+        : isMeldHint
+          ? new Color(205, 255, 218, 255)
+          : Color.WHITE;
       const previousHandler = this.handTouchHandlers.get(node);
       if (previousHandler) {
         node.off('touch-end', previousHandler);
@@ -454,6 +460,23 @@ export class GameController extends BaseScene {
       this.handTouchHandlers.set(node, handler);
       node.on('touch-end', handler);
     });
+  }
+
+  private meldHandHint(view: PlayerGameView): Set<TileId> {
+    const hint = new Set<TileId>();
+    const discard = view.lastDiscard?.tile;
+    if (discard === undefined) return hint;
+    view.legalActions.forEach((action) => {
+      if (!MELD_ACTION_TYPES.has(action.type)) return;
+      getActionPreviewTiles(action).forEach((tile) => {
+        if (tile !== discard) hint.add(tile);
+      });
+    });
+    return hint;
+  }
+
+  private meldPreviewTiles(action: GameAction, view: PlayerGameView): TileId[] {
+    return getKongPreviewTiles(action, view.self.hand, view.xiaoJiActiveAsWild !== false);
   }
 
   private createActionPanel(canvas: Node, layout: RuntimeLayout, view: PlayerGameView, submitting: boolean): void {
@@ -584,7 +607,7 @@ export class GameController extends BaseScene {
     });
   }
 
-  private createMeldActionChoices(canvas: Node, layout: RuntimeLayout, actions: GameAction[], submitting: boolean): void {
+  private createMeldActionChoices(canvas: Node, layout: RuntimeLayout, actions: GameAction[], view: PlayerGameView, submitting: boolean): void {
     const choices = actions.filter((action) => MELD_ACTION_TYPES.has(action.type) && getActionPreviewTiles(action).length > 0);
     const layer = ensureChild(canvas, 'MeldActionChoices');
     layer.active = choices.length > 0;
@@ -597,9 +620,10 @@ export class GameController extends BaseScene {
       if (child.name.startsWith('MeldChoice_')) child.active = false;
     });
 
-    const visibleChoices = choices.slice(0, 4);
+    const passAction = actions.find((action) => action.type === 'PASS');
+    const visibleChoices = [...choices.slice(0, 4), ...(passAction ? [passAction] : [])];
     const panelWidth = layout.w(44);
-    const panelHeight = panelWidth / (1600 / 656);
+    const panelHeight = (panelWidth / (1600 / 656)) * (visibleChoices.length > 4 ? 1.24 : 1);
     const optionWidth = panelWidth * 0.365;
     const optionHeight = panelHeight * 0.255;
     const oldFallback = layer.children.find((child) => child.name === 'MeldChoiceBg');
@@ -612,7 +636,7 @@ export class GameController extends BaseScene {
       const row = Math.floor(index / 2);
       const column = index % 2;
       const x = (column === 0 ? -1 : 1) * panelWidth * 0.192;
-      const y = row === 0 ? panelHeight * 0.116 : -panelHeight * 0.192;
+      const y = row === 0 ? panelHeight * 0.116 : row === 1 ? -panelHeight * 0.192 : -panelHeight * 0.48;
       const option = ensureChild(layer, `MeldChoice_${index}`);
       option.setPosition(x, y, 0);
       option.active = true;
@@ -632,11 +656,11 @@ export class GameController extends BaseScene {
         if (child.name.startsWith('PreviewTile_')) child.active = false;
       });
 
-      const previewTiles = getActionPreviewTiles(action);
+      const previewTiles = this.meldPreviewTiles(action, view);
       const tileWidth = layout.w(2.2);
       const tileHeight = tileWidth * 1.36;
       const tileGap = tileWidth * 0.8;
-      const label = this.meldActionLabel(action.type);
+      const label = action.type === 'PASS' ? ActionLabels.PASS : this.meldActionLabel(action.type);
       this.createText(option, 'ActionLabel', label, new Vec3(-optionWidth * 0.34, 0, 0), layout.s(2.15), new Color(255, 232, 153, 255));
       ensureChild(option, 'ActionLabel').active = true;
       previewTiles.forEach((tile, tileIndex) => {
@@ -649,7 +673,7 @@ export class GameController extends BaseScene {
     const titleNode = ensureChild(layer, 'MeldChoiceTitle');
     titleNode.active = true;
     (titleNode as Node & { setSiblingIndex?: (index: number) => void }).setSiblingIndex?.(layer.children.length - 1);
-    const signature = visibleChoices.map((action) => `${action.type}:${action.actionId}:${getActionPreviewTiles(action).join(',')}`).join('|');
+    const signature = visibleChoices.map((action) => `${action.type}:${action.actionId}:${this.meldPreviewTiles(action, view).join(',')}`).join('|');
     if (signature !== this.meldChoiceSignature) {
       this.meldChoiceSignature = signature;
       this.animatePop(layer, 0.92, 0.22);
@@ -854,6 +878,7 @@ export class GameController extends BaseScene {
   };
 
   private backToRoom(): void {
+    void bgmManager.play('lobbyAmbient');
     if (roomManager.currentRoom) {
       roomManager.setRoom({
         ...roomManager.currentRoom,

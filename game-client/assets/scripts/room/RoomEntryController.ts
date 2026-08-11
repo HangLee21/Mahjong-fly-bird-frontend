@@ -40,6 +40,9 @@ export class RoomEntryController extends BaseScene {
   private codeDigitHeight = 72;
   private codeDigitWidth = 40;
   private submitting = false;
+  private keyboardInputHandler: ((event: { value: string }) => void) | null = null;
+  private keyboardConfirmHandler: ((event: { value: string }) => void) | null = null;
+  private keyboardCompleteHandler: ((event: { value: string }) => void) | null = null;
 
   async start(): Promise<void> {
     console.log('[RoomEntryController] start');
@@ -57,7 +60,10 @@ export class RoomEntryController extends BaseScene {
     createPanel(canvas, 'FallbackBackground', layout.width, layout.height, new Color(0, 0, 0, 25));
 
     createImage(canvas, 'BackButton', 'textures/ui/button_back', layout.s(8), layout.s(8), layout.pos(-40, 30));
-    canvas.children.find((child) => child.name === 'BackButton')?.on('touch-end', () => loadScene('Lobby'));
+    canvas.children.find((child) => child.name === 'BackButton')?.on('touch-end', () => {
+      this.hideRoomCodeKeyboard();
+      loadScene('Lobby');
+    });
 
     const titleWidth = layout.w(30);
     createImage(canvas, 'TitleImage', 'textures/ui/room_entry_title', titleWidth, titleWidth / ROOM_ENTRY_TITLE_RATIO, layout.pos(-24, 22));
@@ -101,6 +107,7 @@ export class RoomEntryController extends BaseScene {
   private openRoomCodeKeyboard(): void {
     const wxApi = (globalThis as { wx?: WechatKeyboardApi }).wx;
     if (wxApi?.showKeyboard) {
+      this.unbindKeyboardHandlers();
       wxApi.showKeyboard({
         defaultValue: this.roomCode,
         maxLength: 6,
@@ -108,14 +115,35 @@ export class RoomEntryController extends BaseScene {
         confirmHold: false,
         confirmType: 'done',
       });
-      wxApi.onKeyboardInput?.((event) => this.setRoomCode(event.value));
-      wxApi.onKeyboardConfirm?.((event) => this.setRoomCode(event.value));
-      wxApi.onKeyboardComplete?.((event) => this.setRoomCode(event.value));
+      this.keyboardInputHandler = (event) => this.setRoomCode(event.value);
+      this.keyboardConfirmHandler = (event) => {
+        this.setRoomCode(event.value);
+        this.hideRoomCodeKeyboard();
+      };
+      this.keyboardCompleteHandler = (event) => this.setRoomCode(event.value);
+      wxApi.onKeyboardInput?.(this.keyboardInputHandler);
+      wxApi.onKeyboardConfirm?.(this.keyboardConfirmHandler);
+      wxApi.onKeyboardComplete?.(this.keyboardCompleteHandler);
       return;
     }
 
     const browserInput = globalThis.prompt?.('请输入房间号', this.roomCode);
     if (browserInput !== null && browserInput !== undefined) this.setRoomCode(browserInput);
+  }
+
+  private hideRoomCodeKeyboard(): void {
+    const wxApi = (globalThis as { wx?: WechatKeyboardApi }).wx;
+    wxApi?.hideKeyboard?.();
+  }
+
+  private unbindKeyboardHandlers(): void {
+    const wxApi = (globalThis as { wx?: WechatKeyboardApi }).wx;
+    if (this.keyboardInputHandler) wxApi?.offKeyboardInput?.(this.keyboardInputHandler);
+    if (this.keyboardConfirmHandler) wxApi?.offKeyboardConfirm?.(this.keyboardConfirmHandler);
+    if (this.keyboardCompleteHandler) wxApi?.offKeyboardComplete?.(this.keyboardCompleteHandler);
+    this.keyboardInputHandler = null;
+    this.keyboardConfirmHandler = null;
+    this.keyboardCompleteHandler = null;
   }
 
   private setRoomCode(value: string): void {
@@ -190,6 +218,7 @@ export class RoomEntryController extends BaseScene {
       }
 
       await roomManager.createRoom(this.roomCode);
+      this.hideRoomCodeKeyboard();
       loadScene('Room');
     } catch (err) {
       console.error('[RoomEntryController] create room failed', err);
@@ -220,6 +249,7 @@ export class RoomEntryController extends BaseScene {
       }
 
       await roomManager.joinRoom(this.roomCode);
+      this.hideRoomCodeKeyboard();
       loadScene('Room');
     } catch (err) {
       console.error('[RoomEntryController] join room failed', err);
@@ -256,7 +286,11 @@ interface WechatKeyboardApi {
     confirmHold?: boolean;
     confirmType?: string;
   }): void;
+  hideKeyboard?(): void;
   onKeyboardInput?(callback: (event: { value: string }) => void): void;
   onKeyboardConfirm?(callback: (event: { value: string }) => void): void;
   onKeyboardComplete?(callback: (event: { value: string }) => void): void;
+  offKeyboardInput?(callback: (event: { value: string }) => void): void;
+  offKeyboardConfirm?(callback: (event: { value: string }) => void): void;
+  offKeyboardComplete?(callback: (event: { value: string }) => void): void;
 }
