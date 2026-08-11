@@ -1,4 +1,4 @@
-export type BgmTrack = 'tableAmbient';
+export type BgmTrack = 'lobbyAmbient' | 'tableAmbient';
 
 export interface BgmTrackConfig {
   resourcePath: string;
@@ -10,7 +10,7 @@ export const AudioConfig = {
   bgm: {
     enabled: true,
     autoPlay: true,
-    defaultTrack: 'tableAmbient' as BgmTrack,
+    defaultTrack: 'lobbyAmbient' as BgmTrack,
     fadeInSeconds: 0.8,
     fadeOutSeconds: 0.35,
     storageKeys: {
@@ -19,6 +19,11 @@ export const AudioConfig = {
     },
   },
   tracks: {
+    lobbyAmbient: {
+      resourcePath: 'audio/bgm/lobby_ambient',
+      loop: true,
+      volume: 0.25,
+    },
     tableAmbient: {
       resourcePath: 'audio/bgm/table_ambient',
       loop: true,

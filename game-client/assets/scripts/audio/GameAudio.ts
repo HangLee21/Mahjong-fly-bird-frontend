@@ -6,7 +6,8 @@ export type GameSound =
   | 'roundStart'
   | 'tileDiscard'
   | 'tileSelect'
-  | 'win';
+  | 'win'
+  | 'winOthers';
 
 const SOUND_PATHS: Record<GameSound, string> = {
   button: 'audio/sfx/ui_click',
@@ -15,6 +16,7 @@ const SOUND_PATHS: Record<GameSound, string> = {
   tileDiscard: 'audio/sfx/tile_discard',
   tileSelect: 'audio/sfx/tile_select',
   win: 'audio/sfx/win',
+  winOthers: 'audio/sfx/win_others',
 };
 
 class GameAudio {

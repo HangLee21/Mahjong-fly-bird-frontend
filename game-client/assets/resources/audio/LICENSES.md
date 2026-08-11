@@ -10,7 +10,8 @@ licensed under Creative Commons Zero (CC0 1.0).
 | `tile_discard.mp3` | Casino Audio | `card-place-1.ogg` |
 | `meld.mp3` | Casino Audio | `chips-collide-2.ogg` |
 | `round_start.mp3` | Casino Audio | `card-shuffle.ogg` |
-| `win.mp3` | Music Jingles | `jingles_PIZZI07.ogg` |
+| `win.mp3` | Music Jingles | `jingles_SAX07.ogg` |
+| `win_others.mp3` | Music Jingles | `jingles_PIZZI07.ogg` |
 
 Sources:
 
@@ -27,12 +28,15 @@ is retained for provenance.
 
 | Local file | Title | Author | License |
 | --- | --- | --- | --- |
-| `bgm/table_ambient.mp3` | Happy Lullaby (song17) | The Cynic Project / cynicmusic | CC0 1.0 |
+| `bgm/lobby_ambient.mp3` | A New Town (RPG Theme) | The Cynic Project / cynicmusic | CC0 1.0 |
+| `bgm/table_ambient.mp3` | Calm Ambient (Synthwave 4K) | The Cynic Project / cynicmusic | CC0 1.0 |
 
 Source:
 
-- https://opengameart.org/content/happy-lullaby-song17
+- https://opengameart.org/content/a-new-town-rpg-theme
+- https://opengameart.org/content/calm-ambient-1-synthwave-4k
 
-The track is a small, calm, loop-friendly placeholder for the table ambience.
-It may be replaced later without code changes by keeping the same resource
-path, or by changing `AudioConfig.tracks.tableAmbient.resourcePath`.
+`lobby_ambient.mp3` plays on non-game pages (login, lobby, room), and
+`table_ambient.mp3` plays during the mahjong game. Both are mono MP3
+transcodes of the CC0 originals for broader WeChat mini-game device
+compatibility.
