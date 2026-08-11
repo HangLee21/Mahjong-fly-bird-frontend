@@ -11,6 +11,7 @@ import { bgmManager } from '../audio/BgmManager';
 import {
   applyLandscapeResolution,
   bindTouchEnd,
+  createButton,
   createImage,
   createImageButton,
   createLabel,
@@ -111,6 +112,8 @@ export class GameController extends BaseScene {
   private meldChoiceSignature = '';
   private kongChoiceSignature = '';
   private winPromptSignature = '';
+  private kongMenuOpen = false;
+  private kongMenuSignature = '';
 
   async start(): Promise<void> {
     console.log('[GameController] start');
@@ -186,6 +189,7 @@ export class GameController extends BaseScene {
     this.createActionPanel(canvas, layout, view, snapshot.submitting);
     this.createMeldActionChoices(canvas, layout, view.legalActions, view, snapshot.submitting);
     this.createKongTileChoice(canvas, layout, view.legalActions, snapshot.submitting);
+    this.createKongMenu(canvas, layout, view, snapshot.submitting);
     this.createResponseHint(canvas, layout, view);
     if (playRoundOpening) this.playRoundOpeningAnimation(canvas, layout, view);
 
@@ -426,14 +430,14 @@ export class GameController extends BaseScene {
     sorted.forEach((tile, index) => {
       const isSelected = this.selectedHandIndex === index && this.lastTapTile === tile;
       const isMeldHint = meldHint.has(tile);
-      const node = this.createTile(
-        handArea,
-        `SelfTile${index}`,
-        tile,
-        new Vec3((index - (sorted.length - 1) / 2) * gap, isSelected ? tileH * 0.28 : isMeldHint ? tileH * 0.16 : 0, 0),
-        tileW,
-        tileH,
-      );
+        const node = this.createTile(
+          handArea,
+          `SelfTile${index}`,
+          tile,
+          new Vec3((index - (sorted.length - 1) / 2) * gap, isSelected ? tileH * 0.28 : 0, 0),
+          tileW,
+          tileH,
+        );
       node.active = true;
       const tileSprite = ensureComponent(ensureChild(node, 'TileImage'), Sprite);
       tileSprite.color = isSelected
@@ -589,7 +593,19 @@ export class GameController extends BaseScene {
     );
     panel.setPosition(hasCenteredChoice ? layout.pos(0, -19) : layout.pos(31, -30));
 
-    visibleActions.forEach((action, index) => {
+    const kongActions = visibleActions.filter((action) => action.type === 'KONG_CONCEALED' || action.type === 'KONG_ADDED');
+    let renderedActions = visibleActions.filter((action) => !kongActions.includes(action));
+    if (kongActions.length === 1) {
+      renderedActions = [...renderedActions, ...kongActions];
+    } else if (kongActions.length > 1) {
+      renderedActions = [...renderedActions, {
+        type: 'KONG_CONCEALED',
+        actionId: 107,
+        extra: { openKongMenu: true },
+      } as GameAction];
+    }
+
+    renderedActions.forEach((action, index) => {
       const width = action.type === 'PASS' && hasCenteredChoice
         ? layout.w(6.4)
         : action.type === 'WIN'
@@ -604,12 +620,16 @@ export class GameController extends BaseScene {
         '',
         ACTION_IMAGE_PATHS[action.type] || 'textures/ui/action_button_pass',
         () => {
-          if (!submitting) {
-            gameAudio.play('button', 0.5);
-            eventBus.emit(GameEvents.ACTION_SELECTED, action);
+          if (submitting) return;
+          gameAudio.play('button', 0.5);
+          if ((action.extra as { openKongMenu?: boolean } | undefined)?.openKongMenu) {
+            this.kongMenuOpen = true;
+            this.render();
+            return;
           }
+          eventBus.emit(GameEvents.ACTION_SELECTED, action);
         },
-        new Vec3((index - (visibleActions.length - 1) / 2) * width * 1.02, 0, 0),
+        new Vec3((index - (renderedActions.length - 1) / 2) * width * 1.02, 0, 0),
         width,
         height,
       );
@@ -745,6 +765,75 @@ export class GameController extends BaseScene {
       this.kongChoiceSignature = signature;
       this.animatePop(layer, 0.9, 0.24);
     }
+  }
+
+  private createKongMenu(canvas: Node, layout: RuntimeLayout, view: PlayerGameView, submitting: boolean): void {
+    const kongActions = view.legalActions.filter(
+      (action) => action.type === 'KONG_CONCEALED' || action.type === 'KONG_ADDED',
+    );
+    const signature = kongActions.map((action) => `${action.type}:${action.tile}`).join('|');
+    if (signature !== this.kongMenuSignature) {
+      this.kongMenuSignature = signature;
+      this.kongMenuOpen = false;
+    }
+    const layer = ensureChild(canvas, 'KongMenuLayer');
+    layer.active = this.kongMenuOpen && kongActions.length > 1;
+    if (!layer.active) return;
+
+    // Same position and panel style as the win prompt.
+    layer.setPosition(layout.pos(29, -20.5));
+    const panelWidth = layout.w(24);
+    const panelHeight = panelWidth / (640 / 260);
+    createImage(layer, 'KongMenuBg', 'textures/ui/room_panel', panelWidth, panelHeight);
+    this.createText(
+      layer,
+      'KongMenuTitle',
+      '选择杠牌',
+      new Vec3(panelWidth * 0.08, panelHeight * 0.26, 0),
+      layout.s(1.45),
+      new Color(255, 236, 158, 255),
+    );
+
+    kongActions.slice(0, 4).forEach((action, index) => {
+      const option = createButton(
+        layer,
+        `KongMenuOption${index}`,
+        `${action.type === 'KONG_CONCEALED' ? '暗杠' : '加杠'} ${getTileLabel(action.tile ?? 0)}`,
+        () => {
+          this.kongMenuOpen = false;
+          if (!submitting) {
+            gameAudio.play('button', 0.5);
+            eventBus.emit(GameEvents.ACTION_SELECTED, action);
+          }
+        },
+        new Vec3(panelWidth * 0.24, panelHeight * (0.1 - index * 0.24), 0),
+      );
+      ensureComponent(option, UITransform).setContentSize(panelWidth * 0.62, panelHeight * 0.18);
+      const label = option.children.find((child) => child.name === 'Label')?.getComponent(Label);
+      if (label) {
+        label.fontSize = layout.s(1.3);
+        label.lineHeight = label.fontSize * 1.15;
+      }
+      option.active = true;
+    });
+
+    const cancel = createButton(
+      layer,
+      'KongMenuCancel',
+      '取消',
+      () => {
+        this.kongMenuOpen = false;
+        this.render();
+      },
+      new Vec3(panelWidth * 0.62, -panelHeight * 0.24, 0),
+    );
+    ensureComponent(cancel, UITransform).setContentSize(panelWidth * 0.3, panelHeight * 0.16);
+    const cancelLabel = cancel.children.find((child) => child.name === 'Label')?.getComponent(Label);
+    if (cancelLabel) {
+      cancelLabel.fontSize = layout.s(1.25);
+      cancelLabel.lineHeight = cancelLabel.fontSize * 1.15;
+    }
+    cancel.active = true;
   }
 
   private createResponseHint(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {

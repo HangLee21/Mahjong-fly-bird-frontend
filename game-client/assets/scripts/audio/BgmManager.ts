@@ -1,5 +1,6 @@
 import { AudioClip, AudioSource, director, game, Game, input, Input, Node, resources, sys } from 'cc';
 import { AudioConfig, BgmTrack } from './AudioConfig';
+import { GeneratedAudioUrls } from '../app/GeneratedAudioUrls';
 
 interface WxInnerAudioContext {
   src: string;
@@ -11,6 +12,20 @@ interface WxInnerAudioContext {
   destroy(): void;
   onError?(callback: (error: unknown) => void): void;
   onEnded?(callback: () => void): void;
+}
+
+interface WxDownloadResult {
+  statusCode?: number;
+  tempFilePath?: string;
+}
+
+interface WxApi {
+  createInnerAudioContext?(): WxInnerAudioContext;
+  downloadFile?(options: {
+    url: string;
+    success: (result: WxDownloadResult) => void;
+    fail: (error: unknown) => void;
+  }): void;
 }
 
 const FADE_FRAME_MS = 32;
@@ -27,6 +42,7 @@ class BgmManager {
   private pausedByLifecycle = false;
   private gestureUnlocked = false;
   private readonly clips = new Map<BgmTrack, AudioClip>();
+  private readonly downloadedUrls = new Map<string, string>();
 
   initialize(sceneRoot: Node): void {
     if (this.root) return;
@@ -70,13 +86,11 @@ class BgmManager {
     this.pausedByLifecycle = false;
 
     const wxContext = this.wxContext ?? this.tryCreateWxContext();
-    const url = (clip as unknown as { nativeUrl?: string }).nativeUrl || '';
+    const url = GeneratedAudioUrls.bgm[track]
+      || (clip as unknown as { nativeUrl?: string }).nativeUrl
+      || '';
     if (wxContext && url) {
-      wxContext.loop = config.loop;
-      wxContext.src = url;
-      wxContext.volume = this.targetVolume(track);
-      wxContext.play();
-      console.log(`[BgmManager] wx BGM started: ${track}`);
+      this.playWxTrack(wxContext, url, config.loop, track);
       return;
     }
 
@@ -178,7 +192,7 @@ class BgmManager {
   }
 
   private tryCreateWxContext(): WxInnerAudioContext | null {
-    const api = (globalThis as { wx?: { createInnerAudioContext?: () => WxInnerAudioContext } }).wx;
+    const api = this.wxApi();
     if (!api?.createInnerAudioContext) return null;
     const context = api.createInnerAudioContext();
     context.onError?.((error) => console.warn('[BgmManager] inner audio error', error));
@@ -187,6 +201,51 @@ class BgmManager {
     });
     this.wxContext = context;
     return context;
+  }
+
+  private wxApi(): WxApi | null {
+    return (globalThis as { wx?: WxApi }).wx ?? null;
+  }
+
+  private playWxTrack(context: WxInnerAudioContext, url: string, loop: boolean, track: BgmTrack): void {
+    const setAndPlay = (src: string): void => {
+      if (this.wxContext !== context) return;
+      context.loop = loop;
+      context.src = src;
+      context.volume = this.targetVolume(track);
+      context.play();
+      console.log(`[BgmManager] wx BGM started: ${track} (${src})`);
+    };
+
+    // Download to a local temp file first, mirroring how the engine plays
+    // remote sound effects reliably; fall back to the direct URL on failure.
+    const cached = this.downloadedUrls.get(url);
+    if (cached) {
+      setAndPlay(cached);
+      return;
+    }
+    if (/^https?:\/\//.test(url)) {
+      const api = this.wxApi();
+      if (api?.downloadFile) {
+        api.downloadFile({
+          url,
+          success: (result) => {
+            if (result.tempFilePath) {
+              this.downloadedUrls.set(url, result.tempFilePath);
+              setAndPlay(result.tempFilePath);
+              return;
+            }
+            setAndPlay(url);
+          },
+          fail: (error) => {
+            console.warn('[BgmManager] download failed, using direct URL', error);
+            setAndPlay(url);
+          },
+        });
+        return;
+      }
+    }
+    setAndPlay(url);
   }
 
   private loadClip(path: string): Promise<AudioClip | null> {
