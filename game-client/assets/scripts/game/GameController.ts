@@ -527,7 +527,7 @@ export class GameController extends BaseScene {
       );
       ensureChild(panel, 'WinPromptTitle').active = true;
 
-      const responseTile = this.responseTile(view) ?? winAction.tile ?? null;
+      const responseTile = winAction.tile ?? this.responseTile(view);
       const tileWidth = layout.w(3.25);
       const tileHeight = tileWidth * 1.36;
       const tilePosition = new Vec3(-promptWidth * 0.32, -promptHeight * 0.04, 0);
@@ -551,7 +551,21 @@ export class GameController extends BaseScene {
         if (targetName) targetName.active = false;
       }
 
-      const promptActions = visibleActions.filter((action) => action.type === 'WIN' || action.type === 'PASS');
+      // Keep self-turn kongs reachable next to the win prompt: a player who can
+      // win must still be able to kong first (e.g. pong + chick -> added kong)
+      // so the replacement draw can score 杠上花 instead of forcing a flat win.
+      const selfKongActions = visibleActions.filter(
+        (action) => action.type === 'KONG_CONCEALED' || action.type === 'KONG_ADDED',
+      );
+      const kongButtons: GameAction[] = selfKongActions.length === 1
+        ? selfKongActions
+        : selfKongActions.length > 1
+          ? [{ type: 'KONG_CONCEALED', actionId: 107, extra: { openKongMenu: true } } as GameAction]
+          : [];
+      const promptActions = [
+        ...visibleActions.filter((action) => action.type === 'WIN' || action.type === 'PASS'),
+        ...kongButtons,
+      ];
       const buttonWidth = layout.w(5.05);
       const buttonHeight = buttonWidth / 1.7;
       const buttonCenterX = promptWidth * 0.18;
@@ -562,10 +576,14 @@ export class GameController extends BaseScene {
           '',
           ACTION_IMAGE_PATHS[action.type] || 'textures/ui/action_button_pass',
           () => {
-            if (!submitting) {
-              gameAudio.play('button', 0.5);
-              eventBus.emit(GameEvents.ACTION_SELECTED, action);
+            if (submitting) return;
+            gameAudio.play('button', 0.5);
+            if ((action.extra as { openKongMenu?: boolean } | undefined)?.openKongMenu) {
+              this.kongMenuOpen = true;
+              this.render();
+              return;
             }
+            eventBus.emit(GameEvents.ACTION_SELECTED, action);
           },
           new Vec3(buttonCenterX + (index - (promptActions.length - 1) / 2) * buttonWidth * 1.12, -promptHeight * 0.08, 0),
           buttonWidth,
@@ -1026,8 +1044,13 @@ export class GameController extends BaseScene {
 
   private responseTile(view: PlayerGameView): TileId | null {
     if (!view.lastDiscard) return null;
-    const hasResponseAction = view.legalActions.some((action) => RESPONSE_ACTION_TYPES.has(action.type));
-    return hasResponseAction ? view.lastDiscard.tile : null;
+    // Only surface the discard tile when a response action actually claims it.
+    // Self-draw wins (WIN without a tile) must not reuse a stale lastDiscard,
+    // e.g. after a kong draw when the previous discard is still on screen.
+    const claimsDiscard = view.legalActions.some(
+      (action) => RESPONSE_ACTION_TYPES.has(action.type) && action.tile !== undefined,
+    );
+    return claimsDiscard ? view.lastDiscard.tile : null;
   }
 
   private meldActionLabel(type: ActionType): string {
