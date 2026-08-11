@@ -180,7 +180,7 @@ New-Item -ItemType Directory -Path $creatorUserData -Force | Out-Null
 
 # Compile the currently deployed BGM URLs into the first pass, then refresh the
 # generated file from this build's remote output and rebuild once if hashes changed.
-$generatedBeforeBuild = Get-GeneratedAudioUrlsContent -RemoteRoot $remoteRoot -AssetOrigin $normalizedAssetOrigin
+$generatedBeforeBuild = Get-GeneratedAudioUrlsContent -RemoteRoot $remoteRoot -AssetOrigin $normalizedOrigin
 if (-not (Test-Path -LiteralPath $generatedAudioUrlsFile -PathType Leaf)) {
     [System.IO.File]::WriteAllText(
         $generatedAudioUrlsFile,
@@ -191,7 +191,7 @@ if (-not (Test-Path -LiteralPath $generatedAudioUrlsFile -PathType Leaf)) {
 
 Invoke-CreatorBuild
 
-$generatedAfterBuild = Get-GeneratedAudioUrlsContent -RemoteRoot $remoteRoot -AssetOrigin $normalizedAssetOrigin
+$generatedAfterBuild = Get-GeneratedAudioUrlsContent -RemoteRoot $remoteRoot -AssetOrigin $normalizedOrigin
 if ($generatedAfterBuild -ne $generatedBeforeBuild) {
     [System.IO.File]::WriteAllText(
         $generatedAudioUrlsFile,
