@@ -10,7 +10,7 @@ licensed under Creative Commons Zero (CC0 1.0).
 | `tile_discard.mp3` | Casino Audio | `card-place-1.ogg` |
 | `meld.mp3` | Casino Audio | `chips-collide-2.ogg` |
 | `round_start.mp3` | Casino Audio | `card-shuffle.ogg` |
-| `win.mp3` | Music Jingles | `jingles_SAX07.ogg` |
+| `win.mp3` | Music Jingles | `jingles_STEEL02.ogg` |
 | `win_others.mp3` | Music Jingles | `jingles_PIZZI07.ogg` |
 
 Sources:

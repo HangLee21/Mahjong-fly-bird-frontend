@@ -610,27 +610,31 @@ export class GameController extends BaseScene {
   private createMeldActionChoices(canvas: Node, layout: RuntimeLayout, actions: GameAction[], view: PlayerGameView, submitting: boolean): void {
     const choices = actions.filter((action) => MELD_ACTION_TYPES.has(action.type) && getActionPreviewTiles(action).length > 0);
     const layer = ensureChild(canvas, 'MeldActionChoices');
-    layer.active = choices.length > 0;
-    if (choices.length === 0) {
+    // Concealed/added kongs are self-turn options that already have action buttons;
+    // skip the big tile-preview panel so a frequently-passed kong never blocks the board.
+    const hasResponseMeld = choices.some((action) => action.type !== 'KONG_CONCEALED' && action.type !== 'KONG_ADDED');
+    if (choices.length === 0 || !hasResponseMeld) {
+      layer.active = false;
       this.meldChoiceSignature = '';
       return;
     }
-    layer.setPosition(layout.pos(0, -1.8));
+    layer.active = true;
+    layer.setPosition(layout.pos(0, -7));
     layer.children.forEach((child) => {
       if (child.name.startsWith('MeldChoice_')) child.active = false;
     });
 
     const passAction = actions.find((action) => action.type === 'PASS');
     const visibleChoices = [...choices.slice(0, 4), ...(passAction ? [passAction] : [])];
-    const panelWidth = layout.w(44);
+    const panelWidth = layout.w(30);
     const panelHeight = (panelWidth / (1600 / 656)) * (visibleChoices.length > 4 ? 1.24 : 1);
-    const optionWidth = panelWidth * 0.365;
-    const optionHeight = panelHeight * 0.255;
+    const optionWidth = panelWidth * 0.36;
+    const optionHeight = panelHeight * 0.26;
     const oldFallback = layer.children.find((child) => child.name === 'MeldChoiceBg');
     if (oldFallback) oldFallback.active = false;
     const backdrop = createImage(layer, 'MeldChoiceBackdrop', 'textures/ui/action_background', panelWidth, panelHeight);
     (backdrop as Node & { setSiblingIndex?: (index: number) => void }).setSiblingIndex?.(0);
-    this.createText(layer, 'MeldChoiceTitle', '选择牌型', new Vec3(0, panelHeight * 0.395, 0), layout.s(2.25), new Color(61, 52, 30, 255));
+    this.createText(layer, 'MeldChoiceTitle', '选择牌型', new Vec3(0, panelHeight * 0.39, 0), layout.s(1.6), new Color(61, 52, 30, 255));
 
     visibleChoices.forEach((action, index) => {
       const row = Math.floor(index / 2);
@@ -657,11 +661,11 @@ export class GameController extends BaseScene {
       });
 
       const previewTiles = this.meldPreviewTiles(action, view);
-      const tileWidth = layout.w(2.2);
+      const tileWidth = layout.w(1.6);
       const tileHeight = tileWidth * 1.36;
       const tileGap = tileWidth * 0.8;
       const label = action.type === 'PASS' ? ActionLabels.PASS : this.meldActionLabel(action.type);
-      this.createText(option, 'ActionLabel', label, new Vec3(-optionWidth * 0.34, 0, 0), layout.s(2.15), new Color(255, 232, 153, 255));
+      this.createText(option, 'ActionLabel', label, new Vec3(-optionWidth * 0.34, 0, 0), layout.s(1.6), new Color(255, 232, 153, 255));
       ensureChild(option, 'ActionLabel').active = true;
       previewTiles.forEach((tile, tileIndex) => {
         const tileX = optionWidth * 0.15 + (tileIndex - (previewTiles.length - 1) / 2) * tileGap;
@@ -688,18 +692,18 @@ export class GameController extends BaseScene {
       this.kongChoiceSignature = '';
       return;
     }
-    layer.setPosition(layout.pos(0, -1.5));
+    layer.setPosition(layout.pos(0, -4));
     layer.children.forEach((child) => {
       if (child.name.startsWith('KongChoice')) child.active = false;
     });
 
-    const panelWidth = layout.w(40);
+    const panelWidth = layout.w(30);
     const panelHeight = panelWidth / (1616 / 656);
     const choiceBackground = createImage(layer, 'ChoiceBg', 'textures/ui/kong_card_action_backgroud', panelWidth, panelHeight);
     (choiceBackground as Node & { setSiblingIndex?: (index: number) => void }).setSiblingIndex?.(0);
     const oldGlow = layer.children.find((child) => child.name === 'ChoiceGlow');
     if (oldGlow) oldGlow.active = false;
-    this.createText(layer, 'ChoiceTitle', '选择杠后补牌', new Vec3(0, panelHeight * 0.405, 0), layout.s(1.85), new Color(61, 52, 30, 255));
+    this.createText(layer, 'ChoiceTitle', '选择杠后补牌', new Vec3(0, panelHeight * 0.4, 0), layout.s(1.55), new Color(61, 52, 30, 255));
 
     choices.slice(0, 2).forEach((action, index) => {
       const tile = action.tile as TileId;
@@ -718,7 +722,7 @@ export class GameController extends BaseScene {
         }
       });
       const tileNode = this.createTile(choiceNode, 'Tile', tile, new Vec3(0, panelHeight * 0.015, 0), panelWidth * 0.105, panelWidth * 0.143);
-      this.createText(choiceNode, 'TileName', getTileLabel(tile), new Vec3(0, -panelHeight * 0.34, 0), layout.s(1.35), new Color(235, 248, 217, 255));
+      this.createText(choiceNode, 'TileName', getTileLabel(tile), new Vec3(0, -panelHeight * 0.34, 0), layout.s(1.2), new Color(235, 248, 217, 255));
       tileNode.active = true;
       ensureChild(tileNode, 'TileImage').active = true;
       ensureChild(choiceNode, 'TileName').active = true;
