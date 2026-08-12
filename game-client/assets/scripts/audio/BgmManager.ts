@@ -428,7 +428,10 @@ class BgmManager {
     this.muted = sys.localStorage.getItem(AudioConfig.bgm.storageKeys.muted) === '1';
     const storedValue = sys.localStorage.getItem(AudioConfig.bgm.storageKeys.volume);
     const storedVolume = storedValue === null ? Number.NaN : Number(storedValue);
-    this.volumeScale = Number.isFinite(storedVolume) && storedVolume >= 0
+    // A stale stored "0" (e.g. written by an older build) would silently mute
+    // every track; only honor a positive stored scale. Muting is handled by
+    // the separate muted flag.
+    this.volumeScale = Number.isFinite(storedVolume) && storedVolume > 0
       ? this.clamp(storedVolume)
       : 1;
   }
