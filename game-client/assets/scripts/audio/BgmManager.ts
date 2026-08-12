@@ -1,6 +1,7 @@
 import { AudioClip, AudioSource, director, game, Game, input, Input, Node, resources, sys } from 'cc';
 import { AudioConfig, BgmTrack } from './AudioConfig';
 import { GeneratedAudioUrls } from '../app/GeneratedAudioUrls';
+import { ExperienceEnvironment } from '../app/ExperienceEnvironment';
 
 interface WxInnerAudioContext {
   src: string;
@@ -14,6 +15,7 @@ interface WxInnerAudioContext {
   onError?(callback: (error: unknown) => void): void;
   onEnded?(callback: () => void): void;
   onCanplay?(callback: () => void): void;
+  onPlay?(callback: () => void): void;
 }
 
 interface WxDownloadResult {
@@ -21,27 +23,40 @@ interface WxDownloadResult {
   tempFilePath?: string;
 }
 
+interface WxRequestOptions {
+  url: string;
+  method: string;
+  data?: unknown;
+  header?: Record<string, string>;
+  fail?: () => void;
+}
+
 interface WxApi {
-  createInnerAudioContext?(): WxInnerAudioContext;
+  createInnerAudioContext?(options?: { autoplay?: boolean }): WxInnerAudioContext;
   setInnerAudioOption?(options: { obeyMuteSwitch: boolean }): void;
   downloadFile?(options: {
     url: string;
     success: (result: WxDownloadResult) => void;
     fail: (error: unknown) => void;
   }): void;
+  request?(options: WxRequestOptions): void;
 }
 
 const FADE_FRAME_MS = 32;
+const WX_CONFIRM_DELAY_MS = 2500;
 
 class BgmManager {
   private root: Node | null = null;
   private source: AudioSource | null = null;
   private wxContext: WxInnerAudioContext | null = null;
   private wxActive = false;
+  private wxPlayingConfirmed = false;
+  private wxErrored = false;
+  private wxTrackUrl = '';
   private currentTrack: BgmTrack | null = null;
   private requestId = 0;
   private fadeTimer: ReturnType<typeof setInterval> | null = null;
-  private wxFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  private wxRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private muted = false;
   private volumeScale = 1;
   private pausedByLifecycle = false;
@@ -73,7 +88,7 @@ class BgmManager {
     input.on(Input.EventType.TOUCH_START, this.handleUserGesture, this);
     input.on(Input.EventType.MOUSE_DOWN, this.handleUserGesture, this);
     this.applyWxAudioOptions();
-    console.log(`[BgmManager] initialized, muted=${this.muted}, volumeScale=${this.volumeScale}`);
+    this.log('info', `initialized muted=${this.muted} volumeScale=${this.volumeScale}`);
 
     if (AudioConfig.bgm.enabled && AudioConfig.bgm.autoPlay) {
       void this.play(AudioConfig.bgm.defaultTrack);
@@ -91,58 +106,45 @@ class BgmManager {
     this.currentTrack = track;
     this.pausedByLifecycle = false;
 
-    const source = this.source;
-    if (!source) return;
-
-    const wxContext = this.wxContext ?? this.tryCreateWxContext();
     const url = GeneratedAudioUrls.bgm[track]
       || (clip as unknown as { nativeUrl?: string }).nativeUrl
       || '';
+    const wxApi = this.wxApi();
+    if (wxApi?.createInnerAudioContext && url) {
+      // WeChat: drive BGM through wx InnerAudioContext with confirmed-playback
+      // retries. The engine AudioSource cannot confirm whether audio actually
+      // started, and Android WeChat is known to swallow the first play().
+      this.stopFade();
+      this.startWxBgm(track, url, config.loop);
+      return;
+    }
 
-    this.stopFade();
-    this.clearWxFallback();
+    const source = this.source;
+    if (!source) return;
     this.wxActive = false;
+    this.stopFade();
     source.stop();
     source.clip = clip;
     source.loop = config.loop;
     source.volume = 0;
     source.play();
     this.fadeTo(this.targetVolume(track), AudioConfig.bgm.fadeInSeconds);
-    console.log(`[BgmManager] play requested: ${track}, targetVolume=${this.targetVolume(track)}`);
-
-    const startedAt = Date.now();
-    const checkPlayback = (): void => {
-      if (requestId !== this.requestId || this.currentTrack !== track || this.source !== source) return;
-      if (source.playing) {
-        console.log(`[BgmManager] playback active: ${track} (engine AudioSource)`);
-        return;
-      }
-      if (wxContext && url) {
-        // The engine AudioSource path (the same one sound effects use) did not
-        // actually start, so switch to WeChat's InnerAudioContext as a fallback.
-        console.warn(`[BgmManager] engine BGM did not start within ${Date.now() - startedAt}ms, falling back to wx InnerAudioContext`);
-        this.stopFade();
-        source.stop();
-        this.playWxTrack(wxContext, url, config.loop, track);
-        return;
-      }
-      console.warn('[BgmManager] playback is waiting for the first user interaction');
-    };
-
-    if (wxContext && url) {
-      this.wxFallbackTimer = setTimeout(checkPlayback, 1200);
-    } else {
-      setTimeout(checkPlayback, 120);
-    }
+    this.log('info', `play requested ${track} (engine AudioSource)`);
+    setTimeout(() => {
+      if (this.source !== source || this.currentTrack !== track) return;
+      if (source.playing) this.log('info', `playback active ${track} (engine AudioSource)`);
+      else this.log('warn', 'playback is waiting for the first user interaction');
+    }, 120);
   }
 
   stop(): void {
     ++this.requestId;
     this.currentTrack = null;
-    this.clearWxFallback();
+    this.clearWxRetry();
     if (this.wxContext && this.wxActive) {
       this.wxContext.stop();
       this.wxActive = false;
+      this.wxPlayingConfirmed = false;
       return;
     }
     const source = this.source;
@@ -186,11 +188,21 @@ class BgmManager {
 
   unlockFromGesture(): void {
     if (!AudioConfig.bgm.enabled || this.muted) return;
-    if (this.wxContext && this.wxActive) {
-      if (!this.gestureUnlocked) {
-        this.gestureUnlocked = true;
-        this.wxContext.play();
-        console.log('[BgmManager] wx BGM unlocked by user interaction');
+    if (this.wxApi()?.createInnerAudioContext && this.wxActive) {
+      const track = this.currentTrack;
+      if (!track) return;
+      const url = this.wxTrackUrl || GeneratedAudioUrls.bgm[track] || '';
+      const loop = AudioConfig.tracks[track].loop;
+      this.log('info', `gesture track=${track} confirmed=${this.wxPlayingConfirmed} errored=${this.wxErrored}`);
+      if (this.wxErrored || !this.wxContext) {
+        this.startWxBgm(track, url, loop);
+        return;
+      }
+      if (!this.wxPlayingConfirmed) {
+        // Android WeChat: a context created before the first interaction may
+        // never emit sound. Recreate it inside the gesture with autoplay.
+        this.destroyWxContext();
+        this.startWxBgm(track, url, loop, true);
       }
       return;
     }
@@ -212,31 +224,135 @@ class BgmManager {
     const track = this.currentTrack || AudioConfig.bgm.defaultTrack;
     this.currentTrack = track;
     this.fadeTo(this.targetVolume(track), 0.25);
-    console.log(`[BgmManager] playback unlocked by user interaction: ${track}`);
+    this.log('info', `playback unlocked by user interaction ${track}`);
   }
 
-  private tryCreateWxContext(): WxInnerAudioContext | null {
+  private startWxBgm(track: BgmTrack, url: string, loop: boolean, autoplay = false): void {
+    this.wxActive = true;
+    this.wxPlayingConfirmed = false;
+    this.wxErrored = false;
+    this.wxTrackUrl = url;
+    this.clearWxRetry();
+    const context = this.wxContext ?? this.createWxContext(autoplay);
+    if (!context) {
+      this.log('error', 'failed to create wx inner audio context');
+      return;
+    }
+    this.log('info', `startWxBgm ${track} autoplay=${autoplay} src=${url.slice(-40)}`);
+
+    const playSrc = (src: string): void => {
+      if (this.wxContext !== context || this.currentTrack !== track) return;
+      context.loop = loop;
+      context.obeyMuteSwitch = false;
+      context.volume = this.targetVolume(track);
+      context.src = src;
+      context.play();
+      this.log('info', `wx BGM play requested ${track} src=${src.startsWith('http') ? 'remote' : 'temp'}`);
+      this.scheduleWxRetry(track, () => this.retryWxBgm(track, url, loop));
+    };
+
+    const cached = this.downloadedUrls.get(url);
+    if (cached) {
+      playSrc(cached);
+      return;
+    }
+    const api = this.wxApi();
+    if (api?.downloadFile && /^https?:\/\//.test(url)) {
+      api.downloadFile({
+        url,
+        success: (result) => {
+          if (this.currentTrack !== track) return;
+          this.log('info', `BGM download OK status=${result.statusCode ?? 'unknown'} temp=${result.tempFilePath ? 'yes' : 'no'}`);
+          if (result.tempFilePath) {
+            this.downloadedUrls.set(url, result.tempFilePath);
+            playSrc(result.tempFilePath);
+            return;
+          }
+          playSrc(url);
+        },
+        fail: (error) => {
+          this.log('warn', `BGM download failed, using direct URL: ${String(error)}`);
+          playSrc(url);
+        },
+      });
+      return;
+    }
+    playSrc(url);
+  }
+
+  private retryWxBgm(track: BgmTrack, url: string, loop: boolean): void {
+    if (this.wxPlayingConfirmed || this.wxErrored || this.currentTrack !== track || !this.wxActive) return;
+    const context = this.wxContext;
+    if (!context) {
+      this.startWxBgm(track, url, loop);
+      return;
+    }
+    this.log('warn', `wx BGM not confirmed, replaying ${track}`);
+    context.play();
+    this.scheduleWxRetry(track, () => {
+      if (this.wxPlayingConfirmed || this.wxErrored || this.currentTrack !== track || !this.wxActive) return;
+      this.log('warn', `wx BGM still not confirmed, recreating context ${track}`);
+      this.destroyWxContext();
+      this.startWxBgm(track, url, loop);
+    });
+  }
+
+  private createWxContext(autoplay = false): WxInnerAudioContext | null {
     const api = this.wxApi();
     if (!api?.createInnerAudioContext) return null;
-    const context = api.createInnerAudioContext();
+    const context = api.createInnerAudioContext(autoplay ? { autoplay: true } : undefined);
+    context.onCanplay?.(() => {
+      this.wxPlayingConfirmed = true;
+      this.clearWxRetry();
+      this.log('info', 'wx BGM onCanplay');
+      context.play();
+    });
+    context.onPlay?.(() => {
+      this.wxPlayingConfirmed = true;
+      this.clearWxRetry();
+      this.log('info', 'wx BGM onPlay');
+    });
     context.onError?.((error) => {
-      console.warn('[BgmManager] inner audio error', error);
-      // InnerAudioContext failed on this platform; retry through the engine
-      // AudioSource (the same path the working sound effects use).
-      this.wxContext = null;
-      this.wxActive = false;
-      const source = this.source;
+      this.wxErrored = true;
+      this.clearWxRetry();
+      this.log('error', `wx BGM inner audio error: ${String(error)}`);
+      const url = this.wxTrackUrl;
       const track = this.currentTrack;
-      if (!source || !track || !source.clip) return;
-      source.stop();
-      source.play();
-      this.fadeTo(this.targetVolume(track), AudioConfig.bgm.fadeInSeconds);
+      this.destroyWxContext();
+      if (track && url) {
+        this.log('warn', 'recreating wx BGM after error');
+        this.startWxBgm(track, url, AudioConfig.tracks[track].loop);
+      }
     });
     context.onEnded?.(() => {
       if (this.wxContext === context) context.play();
     });
     this.wxContext = context;
     return context;
+  }
+
+  private destroyWxContext(): void {
+    const context = this.wxContext;
+    this.wxContext = null;
+    this.wxActive = false;
+    this.wxPlayingConfirmed = false;
+    this.wxErrored = false;
+    this.clearWxRetry();
+    context?.destroy();
+  }
+
+  private scheduleWxRetry(track: BgmTrack, callback: () => void): void {
+    this.clearWxRetry();
+    this.wxRetryTimer = setTimeout(() => {
+      this.wxRetryTimer = null;
+      callback();
+    }, WX_CONFIRM_DELAY_MS);
+  }
+
+  private clearWxRetry(): void {
+    if (!this.wxRetryTimer) return;
+    clearTimeout(this.wxRetryTimer);
+    this.wxRetryTimer = null;
   }
 
   private wxApi(): WxApi | null {
@@ -247,57 +363,6 @@ class BgmManager {
     // Best effort: BGM should keep playing even when the phone's silent switch
     // is on (WeChat's default may otherwise mute InnerAudioContext).
     this.wxApi()?.setInnerAudioOption?.({ obeyMuteSwitch: false });
-  }
-
-  private playWxTrack(context: WxInnerAudioContext, url: string, loop: boolean, track: BgmTrack): void {
-    this.wxActive = true;
-    const setAndPlay = (src: string): void => {
-      if (this.wxContext !== context) return;
-      context.loop = loop;
-      context.obeyMuteSwitch = false;
-      context.src = src;
-      context.volume = this.targetVolume(track);
-      context.onCanplay?.(() => {
-        if (this.wxContext !== context) return;
-        context.play();
-        console.log(`[BgmManager] wx BGM started: ${track} (${src})`);
-      });
-      // WeChat queues play() even when the source is not ready yet; keep it as
-      // a safety net for platforms that never raise onCanplay.
-      context.play();
-      console.log(`[BgmManager] wx BGM play requested: ${track} (${src})`);
-    };
-
-    // Download to a local temp file first, mirroring how the engine plays
-    // remote sound effects reliably; fall back to the direct URL on failure.
-    const cached = this.downloadedUrls.get(url);
-    if (cached) {
-      setAndPlay(cached);
-      return;
-    }
-    if (/^https?:\/\//.test(url)) {
-      const api = this.wxApi();
-      if (api?.downloadFile) {
-        api.downloadFile({
-          url,
-          success: (result) => {
-            console.log(`[BgmManager] BGM download OK status=${result.statusCode ?? 'unknown'}, temp=${result.tempFilePath ? 'yes' : 'no'}`);
-            if (result.tempFilePath) {
-              this.downloadedUrls.set(url, result.tempFilePath);
-              setAndPlay(result.tempFilePath);
-              return;
-            }
-            setAndPlay(url);
-          },
-          fail: (error) => {
-            console.warn('[BgmManager] download failed, using direct URL', error);
-            setAndPlay(url);
-          },
-        });
-        return;
-      }
-    }
-    setAndPlay(url);
   }
 
   private loadClip(path: string): Promise<AudioClip | null> {
@@ -359,12 +424,6 @@ class BgmManager {
     this.fadeTimer = null;
   }
 
-  private clearWxFallback(): void {
-    if (!this.wxFallbackTimer) return;
-    clearTimeout(this.wxFallbackTimer);
-    this.wxFallbackTimer = null;
-  }
-
   private restorePreferences(): void {
     this.muted = sys.localStorage.getItem(AudioConfig.bgm.storageKeys.muted) === '1';
     const storedValue = sys.localStorage.getItem(AudioConfig.bgm.storageKeys.volume);
@@ -376,6 +435,30 @@ class BgmManager {
 
   private clamp(value: number): number {
     return Math.max(0, Math.min(1, value));
+  }
+
+  private log(level: 'info' | 'warn' | 'error', message: string): void {
+    const prefixed = `[BgmManager] ${message}`;
+    if (level === 'warn') console.warn(prefixed);
+    else if (level === 'error') console.error(prefixed);
+    else console.log(prefixed);
+    this.postClientLog(level, prefixed);
+  }
+
+  private postClientLog(level: 'info' | 'warn' | 'error', message: string): void {
+    const api = this.wxApi();
+    if (!api?.request) return;
+    try {
+      api.request({
+        url: `${ExperienceEnvironment.SERVER_ORIGIN}/api/debug/client-log`,
+        method: 'POST',
+        header: { 'content-type': 'application/json' },
+        data: { level, msg: message },
+        fail: () => undefined,
+      });
+    } catch {
+      // Log relay must never break the game.
+    }
   }
 
   private readonly handleHide = (): void => {
