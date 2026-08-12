@@ -4,7 +4,7 @@ import { eventBus } from '../core/EventBus';
 import { Storage } from '../utils/Storage';
 import { authApi } from './AuthApi';
 import type { User } from '../room/RoomTypes';
-import { isWechatMiniGame, requestWechatLoginCode } from '../platform/WechatPlatform';
+import { isWechatMiniGame, requestWechatLoginCode, requestWechatUserProfile } from '../platform/WechatPlatform';
 import { HttpRequestError } from '../network/HttpClient';
 
 export class AuthManager {
@@ -57,10 +57,16 @@ export class AuthManager {
   }
 
   private async loginWithFreshWechatCode(): Promise<void> {
+    let profile: { nickname: string; avatarUrl: string } | null = null;
+    try {
+      profile = await requestWechatUserProfile();
+    } catch (error) {
+      console.warn('[AuthManager] failed to read WeChat profile, using defaults', error);
+    }
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const code = await requestWechatLoginCode();
       try {
-        await this.wechatLogin(code, '微信玩家', '');
+        await this.wechatLogin(code, profile?.nickname ?? '微信玩家', profile?.avatarUrl ?? '');
         return;
       } catch (error) {
         if (!(error instanceof HttpRequestError) || error.status !== 401 || attempt > 0) throw error;

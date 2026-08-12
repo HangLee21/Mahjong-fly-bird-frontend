@@ -264,7 +264,8 @@ export class GameController extends BaseScene {
       melds: view.self.melds,
       discards: view.self.discards,
       status: 'SELF',
-      nickname: '我',
+      nickname: view.self.nickname || '我',
+      avatarUrl: view.self.avatarUrl || '',
     };
 
     this.createPlayerArea(canvas, layout, view, selfPlayer, 'bottom', displayedCurrentPlayer, thinkingSeat);
@@ -424,9 +425,9 @@ export class GameController extends BaseScene {
     const canDiscard = legalDiscardTiles.length > 0;
     const sorted = sortTiles(view.self.hand);
     const meldHint = this.meldHandHint(view);
-    const tileW = layout.w(3.0);
+    const tileW = layout.w(3.5);
     const tileH = tileW * 1.36;
-    const gap = tileW * 0.8;
+    const gap = tileW * 0.84;
     sorted.forEach((tile, index) => {
       const isSelected = this.selectedHandIndex === index && this.lastTapTile === tile;
       const isMeldHint = meldHint.has(tile);

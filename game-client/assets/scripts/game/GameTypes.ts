@@ -102,6 +102,8 @@ export interface PlayerGameView {
   self: {
     seatIndex?: number;
     userId?: string;
+    nickname?: string;
+    avatarUrl?: string;
     isAI?: boolean;
     handCount?: number;
     hand: TileId[];
