@@ -3,7 +3,7 @@ import { eventBus } from '../core/EventBus';
 import { ApiRoutes } from '../network/ApiRoutes';
 import { httpClient } from '../network/HttpClient';
 import { wsClient } from '../network/WsClient';
-import type { GameEventsPayload, GameViewPayload, WsMessage } from '../network/Protocol';
+import type { GameEventsPayload, GameViewPayload, WsMessage, WsStatus } from '../network/Protocol';
 import { buildClientAction, findDiscardAction } from './GameActionBuilder';
 import type { GameAction, GameEvent, PlayerGameView, TileId } from './GameTypes';
 
@@ -22,6 +22,7 @@ export class GameManager {
   presentationAiSeat: number | null = null;
   private networkBound = false;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
   private presentationTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly pendingViews: PendingView[] = [];
   private viewSignature = '';
@@ -51,16 +52,44 @@ export class GameManager {
       console.error('[GameManager] websocket error', message);
       this.scheduleRefresh(300);
     });
+    eventBus.on(GameEvents.WS_STATUS_CHANGED, this.handleWsStatus);
   }
 
   async enterGame(roomId: string, gameId: string, subscribeRoomIds: string[] = [roomId]): Promise<void> {
     this.clearPresentationQueue();
     this.viewSignature = '';
+    this.startPolling();
     wsClient.connect();
     [...new Set(subscribeRoomIds.filter(Boolean))].forEach((id) => wsClient.subscribeRoom(id));
     const view = await httpClient.get<PlayerGameView>(ApiRoutes.gameView(gameId));
     this.setView(view);
   }
+
+  /**
+   * Safety net for missed websocket broadcasts (e.g. after a silent drop or a
+   * reconnect): periodically pull the latest view so the board can never stay
+   * stuck on a stale "AI thinking" frame while the backend is waiting on us.
+   */
+  private startPolling(): void {
+    if (this.pollTimer) return;
+    this.pollTimer = setInterval(() => {
+      if (this.submitting || this.pendingViews.length > 0 || !this.currentView) return;
+      this.refreshView().catch((error) => console.warn('[GameManager] poll refresh failed', error));
+    }, 4000);
+    (this.pollTimer as unknown as { unref?: () => void }).unref?.();
+  }
+
+  stopPolling(): void {
+    if (!this.pollTimer) return;
+    clearInterval(this.pollTimer);
+    this.pollTimer = null;
+  }
+
+  private readonly handleWsStatus = (status: WsStatus): void => {
+    if (status === 'CONNECTED') {
+      this.refreshView().catch((error) => console.warn('[GameManager] refresh after reconnect failed', error));
+    }
+  };
 
   setView(view: PlayerGameView): void {
     const normalized = normalizeGameView(view);

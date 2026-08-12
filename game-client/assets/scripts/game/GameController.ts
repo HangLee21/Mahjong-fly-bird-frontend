@@ -139,6 +139,7 @@ export class GameController extends BaseScene {
     this.handTouchHandlers.clear();
     this.clearOpeningAnimationTimers();
     gameAudio.detach();
+    gameManager.stopPolling();
   }
 
   async enterGame(roomId: string, gameId: string, subscribeRoomIds: string[] = [roomId]): Promise<void> {
