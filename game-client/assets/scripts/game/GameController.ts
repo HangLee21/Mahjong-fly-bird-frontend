@@ -957,7 +957,7 @@ export class GameController extends BaseScene {
     this.createText(layer, 'RoundText', `第 ${view.currentRound ?? this.currentRound} / ${this.displayMaxRounds(view)} 局`, new Vec3(0, dialogHeight * 0.35, 0), layout.s(1.55), new Color(218, 244, 205, 255));
 
     this.createResultScores(layer, layout, view, result, dialogWidth, dialogHeight);
-    this.createFanList(layer, layout, result, dialogWidth, dialogHeight);
+    this.createWinnerDetails(layer, layout, result, dialogWidth, dialogHeight);
     const replayButton = layer.children.find((child) => child.name === 'ReplayButton');
     if (replayButton) replayButton.active = false;
     const buttonWidth = dialogWidth * 0.185;
@@ -1008,26 +1008,71 @@ export class GameController extends BaseScene {
     }
   }
 
-  private createFanList(
+  private createWinnerDetails(
     layer: Node,
     layout: RuntimeLayout,
     result: ScoreResult | undefined,
     dialogWidth: number,
     dialogHeight: number,
   ): void {
-    const fanItems = result?.fanItems || [];
     layer.children.forEach((child) => {
-      if (child.name.startsWith('FanItem') || child.name === 'FanEmptyText') child.active = false;
+      if (
+        child.name.startsWith('FanItem')
+        || child.name.startsWith('WinnerTitle')
+        || child.name.startsWith('WinnerTile')
+        || child.name === 'FanEmptyText'
+      ) {
+        child.active = false;
+      }
     });
-    const columnX = dialogWidth * 0.29;
-    this.createText(layer, 'FanTitle', '番型明细', new Vec3(columnX, dialogHeight * 0.218, 0), layout.s(1.8), new Color(255, 238, 170, 255));
-    fanItems.slice(0, 6).forEach((item, index) => {
-      const y = dialogHeight * (0.135 - index * 0.069);
-      this.createText(layer, `FanItemText${index}`, `${item.name}  ${item.points}分`, new Vec3(columnX, y, 0), layout.s(1.35), new Color(225, 241, 211, 255));
-      ensureChild(layer, `FanItemText${index}`).active = true;
+    const columnX = dialogWidth * 0.27;
+    const winners = result?.winnerDetails?.filter((item) => item.winner >= 0) ?? [];
+    this.createText(
+      layer,
+      'FanTitle',
+      winners.length > 0 ? '胡牌详情' : '番型明细',
+      new Vec3(columnX, dialogHeight * 0.33, 0),
+      layout.s(1.8),
+      new Color(255, 238, 170, 255),
+    );
+    winners.slice(0, 2).forEach((winner, block) => {
+      const blockTop = dialogHeight * (0.33 - block * 0.17);
+      const sourceLabel = winner.source === 'ROB_KONG' ? '抢杠' : winner.source === 'SELF_DRAW' ? '自摸' : '点炮';
+      this.createText(
+        layer,
+        `WinnerTitle${block}`,
+        `${winner.winner + 1}号位 ${sourceLabel}胡牌`,
+        new Vec3(columnX, blockTop, 0),
+        layout.s(1.55),
+        new Color(255, 236, 158, 255),
+      );
+      ensureChild(layer, `WinnerTitle${block}`).active = true;
+      if (winner.tile !== undefined) {
+        this.createText(
+          layer,
+          `WinnerTile${block}`,
+          `进张 ${getTileLabel(winner.tile)}`,
+          new Vec3(columnX, blockTop - dialogHeight * 0.05, 0),
+          layout.s(1.45),
+          new Color(218, 244, 205, 255),
+        );
+        ensureChild(layer, `WinnerTile${block}`).active = true;
+      }
+      winner.fanItems.slice(0, 4).forEach((item, index) => {
+        const y = blockTop - dialogHeight * (0.098 + index * 0.048);
+        this.createText(
+          layer,
+          `FanItemText${block}_${index}`,
+          `${item.name}  ${item.points}分`,
+          new Vec3(columnX, y, 0),
+          layout.s(1.35),
+          new Color(225, 241, 211, 255),
+        );
+        ensureChild(layer, `FanItemText${block}_${index}`).active = true;
+      });
     });
-    if (fanItems.length === 0) {
-      this.createText(layer, 'FanEmptyText', '暂无番型', new Vec3(columnX, dialogHeight * 0.1, 0), layout.s(1.45), new Color(190, 213, 183, 255));
+    if (winners.length === 0) {
+      this.createText(layer, 'FanEmptyText', '暂无番型', new Vec3(columnX, dialogHeight * 0.24, 0), layout.s(1.45), new Color(190, 213, 183, 255));
       ensureChild(layer, 'FanEmptyText').active = true;
     }
   }

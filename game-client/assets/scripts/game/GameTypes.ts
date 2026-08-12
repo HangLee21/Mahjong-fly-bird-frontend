@@ -57,6 +57,20 @@ export interface FanItem {
   description?: string;
 }
 
+export type WinSource = 'SELF_DRAW' | 'DISCARD' | 'ROB_KONG';
+
+export interface WinnerDetail {
+  winner: number;
+  /** 进张：自摸的摸牌 / 点炮的炮牌 / 抢杠的杠牌。 */
+  tile?: number;
+  /** 牌型标题，如 清一色+无鸡、四小鸡。 */
+  title: string;
+  source: WinSource;
+  fan: number;
+  points: number;
+  fanItems: FanItem[];
+}
+
 export interface ScoreResult {
   winnerIndexes: number[];
   loserIndexes: number[];
@@ -69,6 +83,7 @@ export interface ScoreResult {
   scoreDelta: number[];
   title: string;
   description?: string;
+  winnerDetails?: WinnerDetail[];
 }
 
 export interface GameEvent {
