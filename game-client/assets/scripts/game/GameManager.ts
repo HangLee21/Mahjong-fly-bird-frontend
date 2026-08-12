@@ -11,7 +11,7 @@ import type { GameAction, GameEvent, PlayerGameView, TileId } from './GameTypes'
  * AI 每步动作（出牌/吃碰杠）在界面上展示前的延迟。
  * 调大可以放慢 AI 节奏，给报牌语音留出播放时间。
  */
-export const AI_ACTION_PRESENTATION_DELAY_MS = 1000;
+export const AI_ACTION_PRESENTATION_DELAY_MS = 1600;
 
 interface PendingView {
   signature: string;

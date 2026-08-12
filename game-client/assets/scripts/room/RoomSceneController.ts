@@ -138,7 +138,7 @@ export class RoomSceneController extends BaseScene {
   }
 
   private createTopInfo(canvas: Node, layout: RuntimeLayout, room: RoomView): void {
-    const panelWidth = layout.w(25);
+    const panelWidth = layout.w(34);
     const panelHeight = panelWidth / PANEL_RATIO;
     const panelPos = layout.pos(0, 32);
     createImage(canvas, 'RoomInfoPanel', 'textures/ui/room_panel', panelWidth, panelHeight, panelPos);

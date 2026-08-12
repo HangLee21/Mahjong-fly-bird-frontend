@@ -31,7 +31,7 @@ export const DefaultVoiceSettings: VoiceSettings = {
   announceMelds: true,
   announceWins: true,
   volume: 0.9,
-  maxQueueLength: 8,
+  maxQueueLength: 12,
   gapMs: 150,
 };
 

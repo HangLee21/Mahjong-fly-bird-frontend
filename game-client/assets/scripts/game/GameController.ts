@@ -215,7 +215,7 @@ export class GameController extends BaseScene {
   }
 
   private createTopHud(canvas: Node, layout: RuntimeLayout, view: PlayerGameView): void {
-    const hudWidth = layout.w(38);
+    const hudWidth = layout.w(48);
     const hudHeight = layout.h(5.6);
     createPanel(canvas, 'TopHudFallback', hudWidth, hudHeight, new Color(8, 58, 43, 215), layout.pos(0, 37));
     createImage(canvas, 'TopHud', 'textures/ui/hud_panel_top', hudWidth, hudHeight, layout.pos(0, 37));
@@ -446,7 +446,7 @@ export class GameController extends BaseScene {
 
   private createSelfHand(canvas: Node, layout: RuntimeLayout, view: PlayerGameView, legalDiscardTiles: TileId[]): void {
     const handArea = ensureChild(canvas, 'SelfHandArea');
-    handArea.setPosition(layout.pos(7, -37.5));
+    handArea.setPosition(layout.pos(4, -36));
     this.setNodeAngle(handArea, 0);
     handArea.children.forEach((child) => {
       if (child.name.startsWith('SelfTile')) child.active = false;
@@ -456,9 +456,11 @@ export class GameController extends BaseScene {
     const canDiscard = legalDiscardTiles.length > 0;
     const sorted = sortTiles(view.self.hand);
     const meldHint = this.meldHandHint(view);
-    const tileW = layout.w(7);
+    // 70x100 的牌面贴图在 w(7) 下会被放大渲染导致模糊，
+    // 回退到接近原图分辨率的 w(5)（约 1:1 渲染，清晰且依然比最初大）。
+    const tileW = layout.w(5);
     const tileH = tileW * 1.36;
-    const gap = tileW * 0.7;
+    const gap = tileW * 0.72;
     sorted.forEach((tile, index) => {
       const isSelected = this.selectedHandIndex === index && this.lastTapTile === tile;
       const isMeldHint = meldHint.has(tile);
@@ -1264,10 +1266,10 @@ export class GameController extends BaseScene {
       const group = ensureChild(layer, `OpeningHand_${position}`);
       const config = position === 'bottom'
         ? {
-            position: layout.pos(4, -33),
-            tileW: layout.w(3.0),
-            tileH: layout.w(3.0) * 1.36,
-            gap: layout.w(3.0) * 0.8,
+            position: layout.pos(4, -36),
+            tileW: layout.w(5.0),
+            tileH: layout.w(5.0) * 1.36,
+            gap: layout.w(5.0) * 0.8,
           }
         : this.opponentHandConfig(layout, position);
       group.active = true;
