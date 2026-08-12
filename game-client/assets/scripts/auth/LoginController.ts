@@ -12,6 +12,7 @@ import {
   ensureCanvas,
   ensureChild,
   ensureComponent,
+  TEXT_SCALE,
 } from '../ui/RuntimeUi';
 import {
   getWechatAppId,
@@ -140,15 +141,15 @@ export class LoginController extends BaseScene {
     const labelNode = ensureChild(node, 'Label');
     const label = ensureComponent(labelNode, Label);
     label.string = text;
-    label.fontSize = fontSize;
-    label.lineHeight = fontSize * 1.15;
+    label.fontSize = fontSize * TEXT_SCALE;
+    label.lineHeight = label.fontSize * 1.15;
     label.color = Color.WHITE;
   }
 
   private createText(parent: Node, name: string, text: string, position: Vec3, fontSize: number, color = Color.WHITE): Label {
     const label = createLabel(parent, name, text, position);
-    label.fontSize = fontSize;
-    label.lineHeight = fontSize * 1.15;
+    label.fontSize = fontSize * TEXT_SCALE;
+    label.lineHeight = label.fontSize * 1.15;
     label.color = color;
     return label;
   }

@@ -24,6 +24,7 @@ import {
   ensureChild,
   ensureComponent,
   RuntimeLayout,
+  TEXT_SCALE,
 } from '../ui/RuntimeUi';
 import { getTileTexturePath, TILE_BACK_TEXTURE } from '../assets/TileAssetMap';
 import { getTileLabel, sortTiles } from '../utils/TileUtils';
@@ -238,8 +239,8 @@ export class GameController extends BaseScene {
       exitSize,
     );
     const exitLabel = createLabel(canvas, 'ExitGameLabel', '退出', layout.pos(-43, 32.2));
-    exitLabel.fontSize = layout.s(1.6);
-    exitLabel.lineHeight = layout.s(2.0);
+    exitLabel.fontSize = layout.s(1.6) * TEXT_SCALE;
+    exitLabel.lineHeight = layout.s(2.0) * TEXT_SCALE;
     exitLabel.color = new Color(255, 232, 151, 255);
   }
 
@@ -860,7 +861,7 @@ export class GameController extends BaseScene {
       ensureComponent(option, UITransform).setContentSize(panelWidth * 0.62, panelHeight * 0.18);
       const label = option.children.find((child) => child.name === 'Label')?.getComponent(Label);
       if (label) {
-        label.fontSize = layout.s(1.3);
+        label.fontSize = layout.s(1.3) * TEXT_SCALE;
         label.lineHeight = label.fontSize * 1.15;
       }
       option.active = true;
@@ -879,7 +880,7 @@ export class GameController extends BaseScene {
     ensureComponent(cancel, UITransform).setContentSize(panelWidth * 0.3, panelHeight * 0.16);
     const cancelLabel = cancel.children.find((child) => child.name === 'Label')?.getComponent(Label);
     if (cancelLabel) {
-      cancelLabel.fontSize = layout.s(1.25);
+      cancelLabel.fontSize = layout.s(1.25) * TEXT_SCALE;
       cancelLabel.lineHeight = cancelLabel.fontSize * 1.15;
     }
     cancel.active = true;
@@ -1120,8 +1121,8 @@ export class GameController extends BaseScene {
 
   private createText(parent: Node, name: string, text: string, position: Vec3, fontSize: number, color = Color.WHITE): Label {
     const label = createLabel(parent, name, text, position);
-    label.fontSize = fontSize;
-    label.lineHeight = fontSize * 1.15;
+    label.fontSize = fontSize * TEXT_SCALE;
+    label.lineHeight = label.fontSize * 1.15;
     label.color = color;
     return label;
   }

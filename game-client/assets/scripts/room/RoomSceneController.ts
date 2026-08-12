@@ -15,6 +15,7 @@ import {
   ensureCanvas,
   ensureChild,
   RuntimeLayout,
+  TEXT_SCALE,
 } from '../ui/RuntimeUi';
 import { roomManager } from './RoomManager';
 import type { RoomRules, RoomSeat, RoomView } from './RoomTypes';
@@ -533,8 +534,8 @@ export class RoomSceneController extends BaseScene {
 
   private createText(parent: Node, name: string, text: string, position: Vec3, fontSize: number, color = Color.WHITE): Label {
     const label = createLabel(parent, name, text, position);
-    label.fontSize = fontSize;
-    label.lineHeight = fontSize * 1.15;
+    label.fontSize = fontSize * TEXT_SCALE;
+    label.lineHeight = label.fontSize * 1.15;
     label.color = color;
     return label;
   }
@@ -543,7 +544,7 @@ export class RoomSceneController extends BaseScene {
     button.getComponent(UITransform)?.setContentSize(width, height);
     const label = button.children.find((child) => child.name === 'Label')?.getComponent(Label);
     if (label) {
-      label.fontSize = Math.min(height * 0.38, width * 0.22);
+      label.fontSize = Math.min(height * 0.38, width * 0.22) * TEXT_SCALE;
       label.lineHeight = label.fontSize * 1.15;
     }
   }

@@ -1,5 +1,5 @@
 import { _decorator, Color, Component, Graphics, Input, Label, Layers, Node, tween, UITransform, Vec3 } from 'cc';
-import { createImage, createLabel, createLayout, ensureComponent, RuntimeLayout } from './RuntimeUi';
+import { createImage, createLabel, createLayout, ensureComponent, RuntimeLayout, TEXT_SCALE } from './RuntimeUi';
 
 const { ccclass } = _decorator;
 
@@ -60,13 +60,13 @@ export class LoadingOverlay extends Component {
     this.drawSpinner(0);
 
     const title = createLabel(root, 'LoadingTitle', '资源加载中', new Vec3(0, layout.h(16), 0));
-    (title as Label & { fontSize?: number; lineHeight?: number }).fontSize = 46;
-    (title as Label & { fontSize?: number; lineHeight?: number }).lineHeight = 58;
+    (title as Label & { fontSize?: number; lineHeight?: number }).fontSize = 46 * TEXT_SCALE;
+    (title as Label & { fontSize?: number; lineHeight?: number }).lineHeight = 58 * TEXT_SCALE;
     this.codeTitle = title;
 
     this.percentLabel = createLabel(root, 'LoadingPercent', '0%', new Vec3(0, layout.h(3), 0));
-    (this.percentLabel as Label & { fontSize?: number; lineHeight?: number }).fontSize = 34;
-    (this.percentLabel as Label & { fontSize?: number; lineHeight?: number }).lineHeight = 42;
+    (this.percentLabel as Label & { fontSize?: number; lineHeight?: number }).fontSize = 34 * TEXT_SCALE;
+    (this.percentLabel as Label & { fontSize?: number; lineHeight?: number }).lineHeight = 42 * TEXT_SCALE;
 
     const barNode = new Node('LoadingBar');
     barNode.layer = Layers.Enum.UI_2D;
@@ -89,12 +89,12 @@ export class LoadingOverlay extends Component {
     this.drawBar(0);
 
     this.tipLabel = createLabel(root, 'LoadingTip', '正在准备…', new Vec3(0, layout.h(-13), 0));
-    (this.tipLabel as Label & { fontSize?: number; lineHeight?: number }).fontSize = 24;
-    (this.tipLabel as Label & { fontSize?: number; lineHeight?: number }).lineHeight = 30;
+    (this.tipLabel as Label & { fontSize?: number; lineHeight?: number }).fontSize = 24 * TEXT_SCALE;
+    (this.tipLabel as Label & { fontSize?: number; lineHeight?: number }).lineHeight = 30 * TEXT_SCALE;
 
     this.errorLabel = createLabel(root, 'LoadingError', '', new Vec3(0, layout.h(-18), 0));
-    (this.errorLabel as Label & { fontSize?: number; lineHeight?: number }).fontSize = 26;
-    (this.errorLabel as Label & { fontSize?: number; lineHeight?: number }).lineHeight = 32;
+    (this.errorLabel as Label & { fontSize?: number; lineHeight?: number }).fontSize = 26 * TEXT_SCALE;
+    (this.errorLabel as Label & { fontSize?: number; lineHeight?: number }).lineHeight = 32 * TEXT_SCALE;
     (this.errorLabel as Label & { color?: Color }).color = ERROR_COLOR;
     this.errorLabel.node.active = false;
   }
