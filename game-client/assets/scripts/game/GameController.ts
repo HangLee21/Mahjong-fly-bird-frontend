@@ -101,6 +101,9 @@ export class GameController extends BaseScene {
   private resultVisible = false;
   private selectedHandIndex: number | null = null;
   private lastTapTile: TileId | null = null;
+  private lastHandRoundKey = '';
+  private lastSelfHand: TileId[] = [];
+  private newDrawTile: TileId | null = null;
   private currentRound = 1;
   private readonly handTouchHandlers = new Map<Node, () => void>();
   private readonly seatByPosition = new Map<LocalSeatPosition, number>();
@@ -456,6 +459,28 @@ export class GameController extends BaseScene {
     const canDiscard = legalDiscardTiles.length > 0;
     const sorted = sortTiles(view.self.hand);
     const meldHint = this.meldHandHint(view);
+    const roundKey = `${view.gameId}:${view.currentRound ?? view.roundIndex ?? 0}`;
+    if (roundKey !== this.lastHandRoundKey) {
+      this.lastHandRoundKey = roundKey;
+      this.lastSelfHand = [];
+      this.newDrawTile = null;
+    }
+    // 自己回合手牌多了一张时，把新摸的那张标记为高亮；
+    // 手牌结构变化（出牌/吃碰杠）后清除，摸牌后保持到本回合结束。
+    const isSelfTurn = view.currentPlayer === view.playerIndex;
+    if (isSelfTurn && sorted.length === this.lastSelfHand.length + 1) {
+      for (const tile of sorted) {
+        const previousCount = this.lastSelfHand.filter((item) => item === tile).length;
+        const currentCount = sorted.filter((item) => item === tile).length;
+        if (currentCount > previousCount) {
+          this.newDrawTile = tile;
+          break;
+        }
+      }
+    } else if (sorted.length !== this.lastSelfHand.length) {
+      this.newDrawTile = null;
+    }
+    this.lastSelfHand = [...sorted];
     // 70x100 的牌面贴图在 w(7) 下会被放大渲染导致模糊，
     // 回退到接近原图分辨率的 w(5)（约 1:1 渲染，清晰且依然比最初大）。
     const tileW = layout.w(5);
@@ -464,21 +489,22 @@ export class GameController extends BaseScene {
     sorted.forEach((tile, index) => {
       const isSelected = this.selectedHandIndex === index && this.lastTapTile === tile;
       const isMeldHint = meldHint.has(tile);
-        const node = this.createTile(
-          handArea,
-          `SelfTile${index}`,
-          tile,
-          new Vec3((index - (sorted.length - 1) / 2) * gap, isSelected ? tileH * 0.28 : 0, 0),
-          tileW,
-          tileH,
-        );
+      const isNewDraw = this.newDrawTile !== null && tile === this.newDrawTile;
+      const tilePosition = new Vec3((index - (sorted.length - 1) / 2) * gap, isSelected ? tileH * 0.28 : 0, 0);
+      if (isNewDraw) {
+        const glow = createImage(handArea, `SelfTileGlow${index}`, 'textures/ui/tile_selected_glow', tileW * 1.42, tileH * 1.2, tilePosition);
+        glow.active = true;
+      }
+      const node = this.createTile(handArea, `SelfTile${index}`, tile, tilePosition, tileW, tileH);
       node.active = true;
       const tileSprite = ensureComponent(ensureChild(node, 'TileImage'), Sprite);
       tileSprite.color = isSelected
         ? new Color(255, 235, 145, 255)
-        : isMeldHint
-          ? new Color(205, 255, 218, 255)
-          : Color.WHITE;
+        : isNewDraw
+          ? new Color(165, 215, 255, 255)
+          : isMeldHint
+            ? new Color(205, 255, 218, 255)
+            : Color.WHITE;
       const previousHandler = this.handTouchHandlers.get(node);
       if (previousHandler) {
         node.off('touch-end', previousHandler);
