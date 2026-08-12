@@ -4,10 +4,24 @@ import { authManager } from '../auth/AuthManager';
 import { eventBus } from '../core/EventBus';
 import { wsClient } from '../network/WsClient';
 import { roomApi } from './RoomApi';
+import type { WsMessage } from '../network/Protocol';
 import type { RoomPreview, RoomRules, RoomSeat, RoomView, User } from './RoomTypes';
 
 export class RoomManager {
   currentRoom: RoomView | null = null;
+
+  constructor() {
+    // 后端在有人加入/加AI/开局时会广播 ROOM_VIEW，
+    // 这里统一刷新本地房间状态，房间页会随之重绘或进入对局。
+    wsClient.on('ROOM_VIEW', this.handleRoomView);
+  }
+
+  private readonly handleRoomView = (message: WsMessage): void => {
+    const room = message.payload as RoomView | undefined;
+    if (!room || !room.roomId || !room.ownerId || !Array.isArray(room.seats)) return;
+    if (!this.currentRoom || this.currentRoom.roomId !== room.roomId) return;
+    this.setRoom(room);
+  };
 
   async createRoom(roomId: string): Promise<RoomView> {
     const result = await roomApi.createRoom(this.defaultRules(), roomId);
@@ -32,6 +46,13 @@ export class RoomManager {
     const room = AppConfig.USE_MOCK_HTTP
       ? this.addLocalAi(seatIndex)
       : this.applyAddAiResponse(await roomApi.addAi(this.currentRoom.roomId, seatIndex, 'v3-lite'));
+    this.setRoom(room);
+    return room;
+  }
+
+  async updateRules(rules: RoomRules): Promise<RoomView> {
+    if (!this.currentRoom) throw new Error('当前没有房间');
+    const room = this.unwrapRoom(await roomApi.updateRules(this.currentRoom.roomId, rules));
     this.setRoom(room);
     return room;
   }

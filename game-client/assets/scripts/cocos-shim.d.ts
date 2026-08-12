@@ -22,6 +22,7 @@ declare module 'cc' {
     removeAllChildren(): void;
     addComponent<T>(ctor: new (...args: never[]) => T): T;
     getComponent<T>(ctor: new (...args: never[]) => T): T | null;
+    getComponents<T>(ctor: new (...args: never[]) => T): T[];
     on(type: string, callback: (...args: never[]) => void, target?: unknown): void;
     off(type: string, callback: (...args: never[]) => void, target?: unknown): void;
   }
@@ -45,7 +46,7 @@ declare module 'cc' {
   }
   export class Canvas { cameraComponent: Camera | null; }
   export class Prefab {}
-  export class AudioClip {}
+  export class AudioClip { duration: number; }
   export class AudioSource {
     clip: AudioClip | null;
     loop: boolean;

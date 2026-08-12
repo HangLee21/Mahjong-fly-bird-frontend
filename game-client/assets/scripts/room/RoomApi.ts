@@ -22,6 +22,10 @@ export class RoomApi {
     return httpClient.post(ApiRoutes.addAi(roomId), { seatIndex, model });
   }
 
+  updateRules(roomId: string, rules: RoomRules): Promise<RoomResponse> {
+    return httpClient.post(ApiRoutes.updateRoomRules(roomId), rules);
+  }
+
   leaveRoom(roomId: string): Promise<RoomResponse> {
     return httpClient.post(ApiRoutes.leaveRoom(roomId), {});
   }

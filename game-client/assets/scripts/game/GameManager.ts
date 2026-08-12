@@ -7,7 +7,11 @@ import type { GameEventsPayload, GameViewPayload, WsMessage, WsStatus } from '..
 import { buildClientAction, findDiscardAction } from './GameActionBuilder';
 import type { GameAction, GameEvent, PlayerGameView, TileId } from './GameTypes';
 
-const AI_DISCARD_PRESENTATION_DELAY_MS = 520;
+/**
+ * AI 每步动作（出牌/吃碰杠）在界面上展示前的延迟。
+ * 调大可以放慢 AI 节奏，给报牌语音留出播放时间。
+ */
+export const AI_ACTION_PRESENTATION_DELAY_MS = 1000;
 
 interface PendingView {
   signature: string;
@@ -130,7 +134,21 @@ export class GameManager {
           const delayed = this.pendingViews.shift();
           if (delayed) this.applyView(delayed.view, delayed.signature);
           this.drainPendingViews();
-        }, AI_DISCARD_PRESENTATION_DELAY_MS);
+        }, AI_ACTION_PRESENTATION_DELAY_MS);
+        return;
+      }
+
+      const aiMeldSeat = getAiMeldPresentationSeat(this.currentView, next.view);
+      if (aiMeldSeat !== null) {
+        this.presentationAiSeat = aiMeldSeat;
+        this.submitting = true;
+        eventBus.emit(GameEvents.GAME_VIEW_CHANGED, this.snapshot());
+        this.presentationTimer = setTimeout(() => {
+          this.presentationTimer = null;
+          const delayed = this.pendingViews.shift();
+          if (delayed) this.applyView(delayed.view, delayed.signature);
+          this.drainPendingViews();
+        }, AI_ACTION_PRESENTATION_DELAY_MS);
         return;
       }
 
@@ -273,6 +291,26 @@ export function getAiDiscardPresentationSeat(
   const previousCount = discardCountForSeat(previous, seatIndex);
   const nextCount = discardCountForSeat(next, seatIndex);
   return nextCount > previousCount ? seatIndex : null;
+}
+
+export function getAiMeldPresentationSeat(
+  previous: PlayerGameView | null,
+  next: PlayerGameView,
+): number | null {
+  if (!previous || previous.gameId !== next.gameId) return null;
+  const meldCountFor = (view: PlayerGameView, seat: number): number => {
+    if (seat === view.playerIndex) return view.self.melds.length;
+    const player = [...view.opponents, ...(view.players || [])]
+      .find((candidate) => candidate.seatIndex === seat);
+    return player?.melds.length || 0;
+  };
+  for (const candidate of [...next.opponents, ...(next.players || [])]) {
+    if (!candidate.isAI || candidate.seatIndex === next.playerIndex) continue;
+    if (meldCountFor(next, candidate.seatIndex) > meldCountFor(previous, candidate.seatIndex)) {
+      return candidate.seatIndex;
+    }
+  }
+  return null;
 }
 
 export function getDisplayedScores(view: PlayerGameView): number[] {

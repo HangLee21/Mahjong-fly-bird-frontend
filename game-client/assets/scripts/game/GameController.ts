@@ -8,6 +8,8 @@ import { mockGameView } from '../mock/MockData';
 import { roomManager } from '../room/RoomManager';
 import { gameAudio } from '../audio/GameAudio';
 import { bgmManager } from '../audio/BgmManager';
+import { meldTypeToVoiceKey, tileToVoiceKey, winVoiceKeys } from '../audio/VoiceCatalog';
+import { showWechatConfirm } from '../platform/WechatPlatform';
 import {
   applyLandscapeResolution,
   bindTouchEnd,
@@ -27,7 +29,7 @@ import { getTileTexturePath, TILE_BACK_TEXTURE } from '../assets/TileAssetMap';
 import { getTileLabel, sortTiles } from '../utils/TileUtils';
 import { getActionPreviewTiles, getKongPreviewTiles } from './GameActionBuilder';
 import { gameManager, getDisplayedScores } from './GameManager';
-import type { ActionType, GameAction, LocalSeatPosition, PlayerGameView, PlayerPublicView, ScoreResult, TileId } from './GameTypes';
+import type { ActionType, GameAction, LocalSeatPosition, Meld, PlayerGameView, PlayerPublicView, ScoreResult, TileId } from './GameTypes';
 
 const { ccclass } = _decorator;
 
@@ -102,7 +104,7 @@ export class GameController extends BaseScene {
   private readonly handTouchHandlers = new Map<Node, () => void>();
   private readonly seatByPosition = new Map<LocalSeatPosition, number>();
   private readonly discardCounts = new Map<LocalSeatPosition, number>();
-  private readonly meldTileCounts = new Map<LocalSeatPosition, number>();
+  private readonly meldSignatures = new Map<LocalSeatPosition, string>();
   private readonly openingAnimationTimers: Array<ReturnType<typeof setTimeout>> = [];
   private turnPulseVisible = true;
   private lastCurrentPlayer: number | null = null;
@@ -114,6 +116,7 @@ export class GameController extends BaseScene {
   private winPromptSignature = '';
   private kongMenuOpen = false;
   private kongMenuSignature = '';
+  private exiting = false;
 
   async start(): Promise<void> {
     console.log('[GameController] start');
@@ -176,6 +179,7 @@ export class GameController extends BaseScene {
     if (view.status === 'FINISHED' && this.lastAudioStatus !== 'FINISHED') {
       const selfWon = Boolean(view.result?.winnerIndexes.includes(view.playerIndex));
       gameAudio.play(selfWon ? 'win' : 'winOthers', selfWon ? 0.7 : 0.55);
+      if (view.result) gameAudio.playVoice(winVoiceKeys(view.result), 1.0);
     }
     this.lastAudioStatus = view.status;
 
@@ -222,6 +226,21 @@ export class GameController extends BaseScene {
       layout.s(1.65),
       new Color(235, 248, 217, 255),
     );
+    const exitSize = layout.s(5.5);
+    createImageButton(
+      canvas,
+      'ExitGameButton',
+      '',
+      'textures/ui/button_back',
+      () => void this.exitGame(),
+      layout.pos(-43, 37),
+      exitSize,
+      exitSize,
+    );
+    const exitLabel = createLabel(canvas, 'ExitGameLabel', '退出', layout.pos(-43, 32.2));
+    exitLabel.fontSize = layout.s(1.6);
+    exitLabel.lineHeight = layout.s(2.0);
+    exitLabel.color = new Color(255, 232, 151, 255);
   }
 
   private createCenterStatus(
@@ -322,7 +341,7 @@ export class GameController extends BaseScene {
     ensureChild(root, 'TurnIndicatorText').active = displayedCurrentPlayer === player.seatIndex && this.turnPulseVisible;
 
     this.createDiscardArea(canvas, layout, position, player.discards, view.lastDiscard?.fromPlayer === player.seatIndex ? view.lastDiscard.tile : null);
-    this.createMeldArea(canvas, layout, position, player.melds.map((meld) => meld.tiles));
+    this.createMeldArea(canvas, layout, position, player.melds);
     if (position !== 'bottom') this.createOpponentHandCount(canvas, layout, position, player.handCount);
   }
 
@@ -356,20 +375,26 @@ export class GameController extends BaseScene {
     });
     if (animateNewestTile && visibleDiscards.length > 0) {
       gameAudio.play('tileDiscard', 0.55);
+      const newestTile = visibleDiscards[visibleDiscards.length - 1];
+      const voiceKey = tileToVoiceKey(newestTile);
+      if (voiceKey) gameAudio.playVoice([voiceKey], 0.9);
     }
     this.discardCounts.set(position, discards.length);
   }
 
-  private createMeldArea(canvas: Node, layout: RuntimeLayout, position: LocalSeatPosition, melds: TileId[][]): void {
+  private createMeldArea(canvas: Node, layout: RuntimeLayout, position: LocalSeatPosition, melds: Meld[]): void {
     const config = this.meldAreaConfig(layout, position);
     const area = ensureChild(canvas, `Meld_${position}`);
     area.setPosition(config.position);
     this.setNodeAngle(area, this.sideAngle(position));
-    const meldTileCount = melds.reduce((sum, meld) => sum + meld.length, 0);
-    const previousMeldTileCount = this.meldTileCounts.get(position);
-    const hasNewMeld = previousMeldTileCount !== undefined && meldTileCount > previousMeldTileCount;
-    this.meldTileCounts.set(position, meldTileCount);
-    area.active = melds.some((meld) => meld.length > 0);
+    const meldSignature = JSON.stringify(melds.map((meld) => ({ type: meld.type, tiles: meld.tiles })));
+    const previousMeldSignature = this.meldSignatures.get(position);
+    const hasNewMeld = previousMeldSignature !== undefined && meldSignature !== previousMeldSignature;
+    const newMeld = hasNewMeld
+      ? melds.find((meld) => !previousMeldSignature.includes(JSON.stringify({ type: meld.type, tiles: meld.tiles })))
+      : null;
+    this.meldSignatures.set(position, meldSignature);
+    area.active = melds.some((meld) => meld.tiles.length > 0);
     if (!area.active) return;
     area.children.forEach((child) => {
       if (child.name.startsWith('MeldTile')) child.active = false;
@@ -377,23 +402,27 @@ export class GameController extends BaseScene {
     createImage(area, 'MeldAreaBg', 'textures/ui/meld_area', config.width, config.height);
     const visibleMelds = melds.slice(0, 4);
     const contentUnits = 1
-      + visibleMelds.reduce((sum, meld) => sum + Math.max(0, meld.length - 1) * 0.64, 0)
+      + visibleMelds.reduce((sum, meld) => sum + Math.max(0, meld.tiles.length - 1) * 0.64, 0)
       + Math.max(0, visibleMelds.length - 1) * 1.15;
     const tileWidth = Math.min(config.tileW, config.width * 0.9 / contentUnits);
     const tileHeight = tileWidth * (config.tileH / config.tileW);
     const tileGap = tileWidth * 0.64;
     const groupGap = tileWidth * 1.15;
-    const totalSpan = visibleMelds.reduce((sum, meld) => sum + Math.max(0, meld.length - 1) * tileGap, 0)
+    const totalSpan = visibleMelds.reduce((sum, meld) => sum + Math.max(0, meld.tiles.length - 1) * tileGap, 0)
       + Math.max(0, visibleMelds.length - 1) * groupGap;
     let cursor = -totalSpan / 2;
     visibleMelds.forEach((meld, meldIndex) => {
-      meld.forEach((tile, tileIndex) => {
+      meld.tiles.forEach((tile, tileIndex) => {
         const tileNode = this.createTile(area, `MeldTile${meldIndex}_${tileIndex}`, tile, new Vec3(cursor + tileIndex * tileGap, 0, 0), tileWidth, tileHeight);
         tileNode.active = true;
       });
-      cursor += Math.max(0, meld.length - 1) * tileGap + groupGap;
+      cursor += Math.max(0, meld.tiles.length - 1) * tileGap + groupGap;
     });
-    if (hasNewMeld) gameAudio.play('meld', 0.62);
+    if (hasNewMeld) {
+      gameAudio.play('meld', 0.62);
+      const voiceKey = newMeld ? meldTypeToVoiceKey(newMeld.type) : null;
+      if (voiceKey) gameAudio.playVoice([voiceKey], 0.95);
+    }
   }
 
   private createOpponentHandCount(canvas: Node, layout: RuntimeLayout, position: LocalSeatPosition, count: number): void {
@@ -416,7 +445,7 @@ export class GameController extends BaseScene {
 
   private createSelfHand(canvas: Node, layout: RuntimeLayout, view: PlayerGameView, legalDiscardTiles: TileId[]): void {
     const handArea = ensureChild(canvas, 'SelfHandArea');
-    handArea.setPosition(layout.pos(4, -33));
+    handArea.setPosition(layout.pos(7, -37.5));
     this.setNodeAngle(handArea, 0);
     handArea.children.forEach((child) => {
       if (child.name.startsWith('SelfTile')) child.active = false;
@@ -426,9 +455,9 @@ export class GameController extends BaseScene {
     const canDiscard = legalDiscardTiles.length > 0;
     const sorted = sortTiles(view.self.hand);
     const meldHint = this.meldHandHint(view);
-    const tileW = layout.w(3.5);
+    const tileW = layout.w(7);
     const tileH = tileW * 1.36;
-    const gap = tileW * 0.84;
+    const gap = tileW * 0.7;
     sorted.forEach((tile, index) => {
       const isSelected = this.selectedHandIndex === index && this.lastTapTile === tile;
       const isMeldHint = meldHint.has(tile);
@@ -1000,6 +1029,28 @@ export class GameController extends BaseScene {
     if (!this.resultVisible) void gameManager.submitAction(action);
   };
 
+  private async exitGame(): Promise<void> {
+    if (this.exiting) return;
+    const confirmed = await showWechatConfirm(
+      '退出对局',
+      '确定退出当前对局吗？退出后将回到输入房间号页面，无人留守的房间会被解散。',
+      '退出',
+      '继续游戏',
+    );
+    if (!confirmed) return;
+    this.exiting = true;
+    try {
+      await roomManager.leaveRoom();
+    } catch (err) {
+      console.warn('[GameController] leave room failed, exiting locally', err);
+    } finally {
+      this.unschedule?.(this.updateTurnPulse);
+      gameManager.stopPolling();
+      this.clearOpeningAnimationTimers();
+      loadScene('RoomEntry');
+    }
+  }
+
   private backToRoom(): void {
     void bgmManager.play('lobbyAmbient');
     if (roomManager.currentRoom) {
@@ -1115,7 +1166,7 @@ export class GameController extends BaseScene {
   }
 
   private playerAreaConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
-    if (position === 'bottom') return { width: layout.w(21), height: layout.w(21) / PLAYER_PANEL_RATIO_SELF, position: layout.pos(-34, -29) };
+    if (position === 'bottom') return { width: layout.w(21), height: layout.w(21) / PLAYER_PANEL_RATIO_SELF, position: layout.pos(-39, -25) };
     if (position === 'right') return { width: layout.w(14), height: layout.w(14) / PLAYER_PANEL_RATIO_OTHER, position: layout.pos(35, 2) };
     if (position === 'top') return { width: layout.w(15), height: layout.w(15) / PLAYER_PANEL_RATIO_OTHER, position: layout.pos(0, 29) };
     return { width: layout.w(14), height: layout.w(14) / PLAYER_PANEL_RATIO_OTHER, position: layout.pos(-35, 2) };
@@ -1124,16 +1175,16 @@ export class GameController extends BaseScene {
   private discardAreaConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
     const width = position === 'bottom' || position === 'top' ? layout.w(18.5) : layout.w(13);
     const height = width / DISCARD_AREA_RATIO;
-    if (position === 'bottom') return { width, height, position: layout.pos(0, -21), tileW: layout.w(2.2), tileH: layout.w(3.0) };
+    if (position === 'bottom') return { width, height, position: layout.pos(0, -18), tileW: layout.w(2.2), tileH: layout.w(3.0) };
     if (position === 'right') return { width, height, position: layout.pos(22, 3), tileW: layout.w(1.8), tileH: layout.w(2.45) };
     if (position === 'top') return { width, height, position: layout.pos(0, 14.5), tileW: layout.w(2.05), tileH: layout.w(2.8) };
     return { width, height, position: layout.pos(-22, 3), tileW: layout.w(1.8), tileH: layout.w(2.45) };
   }
 
   private meldAreaConfig(layout: RuntimeLayout, position: LocalSeatPosition) {
-    const width = position === 'bottom' ? layout.w(22) : layout.w(17);
+    const width = position === 'bottom' ? layout.w(20) : layout.w(17);
     const height = width / MELD_AREA_RATIO;
-    if (position === 'bottom') return { width, height, position: layout.pos(-23, -30.5), tileW: layout.w(2.25), tileH: layout.w(3.05) };
+    if (position === 'bottom') return { width, height, position: layout.pos(-28, -15), tileW: layout.w(2.25), tileH: layout.w(3.05) };
     if (position === 'right') return { width, height, position: layout.pos(30, -12), tileW: layout.w(1.8), tileH: layout.w(2.45) };
     if (position === 'top') return { width, height, position: layout.pos(-19, 23), tileW: layout.w(1.85), tileH: layout.w(2.5) };
     return { width, height, position: layout.pos(-30, -12), tileW: layout.w(1.8), tileH: layout.w(2.45) };

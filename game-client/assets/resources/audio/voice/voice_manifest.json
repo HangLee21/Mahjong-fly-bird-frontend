@@ -1,0 +1,267 @@
+{
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "rate": "+10%",
+  "generated_at": "2026-08-12 14:41:42",
+  "count": 37,
+  "items": [
+    {
+      "key": "chi",
+      "text": "吃",
+      "file": "chi.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "peng",
+      "text": "碰",
+      "file": "peng.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "gang",
+      "text": "杠",
+      "file": "gang.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "hu",
+      "text": "胡",
+      "file": "hu.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "zi_mo",
+      "text": "自摸",
+      "file": "zi_mo.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "gang_shang_hua",
+      "text": "杠上花",
+      "file": "gang_shang_hua.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "qiang_gang_hu",
+      "text": "抢杠胡",
+      "file": "qiang_gang_hu.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "wu_ji",
+      "text": "无鸡",
+      "file": "wu_ji.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "guo",
+      "text": "过",
+      "file": "guo.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "ting",
+      "text": "听牌",
+      "file": "ting.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "yi_tong",
+      "text": "一筒",
+      "file": "yi_tong.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "yi_tiao",
+      "text": "一条",
+      "file": "yi_tiao.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "yi_wan",
+      "text": "一万",
+      "file": "yi_wan.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "er_tong",
+      "text": "二筒",
+      "file": "er_tong.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "er_tiao",
+      "text": "二条",
+      "file": "er_tiao.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "er_wan",
+      "text": "二万",
+      "file": "er_wan.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "san_tong",
+      "text": "三筒",
+      "file": "san_tong.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "san_tiao",
+      "text": "三条",
+      "file": "san_tiao.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "san_wan",
+      "text": "三万",
+      "file": "san_wan.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "si_tong",
+      "text": "四筒",
+      "file": "si_tong.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "si_tiao",
+      "text": "四条",
+      "file": "si_tiao.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "si_wan",
+      "text": "四万",
+      "file": "si_wan.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "wu_tong",
+      "text": "五筒",
+      "file": "wu_tong.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "wu_tiao",
+      "text": "五条",
+      "file": "wu_tiao.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "wu_wan",
+      "text": "五万",
+      "file": "wu_wan.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "liu_tong",
+      "text": "六筒",
+      "file": "liu_tong.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "liu_tiao",
+      "text": "六条",
+      "file": "liu_tiao.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "liu_wan",
+      "text": "六万",
+      "file": "liu_wan.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "qi_tong",
+      "text": "七筒",
+      "file": "qi_tong.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "qi_tiao",
+      "text": "七条",
+      "file": "qi_tiao.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "qi_wan",
+      "text": "七万",
+      "file": "qi_wan.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "ba_tong",
+      "text": "八筒",
+      "file": "ba_tong.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "ba_tiao",
+      "text": "八条",
+      "file": "ba_tiao.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "ba_wan",
+      "text": "八万",
+      "file": "ba_wan.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "jiu_tong",
+      "text": "九筒",
+      "file": "jiu_tong.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "jiu_tiao",
+      "text": "九条",
+      "file": "jiu_tiao.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    },
+    {
+      "key": "jiu_wan",
+      "text": "九万",
+      "file": "jiu_wan.mp3",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "rate": "+10%"
+    }
+  ]
+}

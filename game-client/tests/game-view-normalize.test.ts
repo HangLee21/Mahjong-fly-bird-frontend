@@ -11,9 +11,11 @@ jest.mock(
 );
 
 import {
+  AI_ACTION_PRESENTATION_DELAY_MS,
   extractGameView,
   GameManager,
   getAiDiscardPresentationSeat,
+  getAiMeldPresentationSeat,
   getDisplayedScores,
   normalizeGameView,
 } from '../assets/scripts/game/GameManager';
@@ -126,7 +128,7 @@ describe('AI discard presentation delay', () => {
     expect(manager.currentView?.stepIndex).toBe(previous.stepIndex);
     expect(manager.presentationAiSeat).toBe(1);
 
-    jest.advanceTimersByTime(520);
+    jest.advanceTimersByTime(AI_ACTION_PRESENTATION_DELAY_MS);
 
     expect(manager.currentView?.stepIndex).toBe(next.stepIndex);
     expect(manager.presentationAiSeat).toBeNull();
@@ -141,9 +143,28 @@ describe('AI discard presentation delay', () => {
     manager.setView(previous);
     manager.setView(next);
     manager.setView(previous);
-    jest.advanceTimersByTime(520);
+    jest.advanceTimersByTime(AI_ACTION_PRESENTATION_DELAY_MS);
 
     expect(manager.currentView?.stepIndex).toBe(next.stepIndex);
     jest.useRealTimers();
+  });
+});
+
+describe('AI meld presentation delay', () => {
+  it('recognizes a new meld from an AI seat', () => {
+    const previous = normalizeGameView(JSON.parse(JSON.stringify(backendView)) as PlayerGameView);
+    const next = JSON.parse(JSON.stringify(previous)) as PlayerGameView;
+    next.opponents[0].melds = [{ type: 'PONG', tiles: [21, 21, 21], stepIndex: 19 }];
+    if (next.players) next.players[0].melds = next.opponents[0].melds;
+
+    expect(getAiMeldPresentationSeat(previous, next)).toBe(1);
+  });
+
+  it('ignores melds made by the local player', () => {
+    const previous = normalizeGameView(JSON.parse(JSON.stringify(backendView)) as PlayerGameView);
+    const next = JSON.parse(JSON.stringify(previous)) as PlayerGameView;
+    next.self.melds = [{ type: 'CHOW', tiles: [21, 22, 23], stepIndex: 19 }];
+
+    expect(getAiMeldPresentationSeat(previous, next)).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ export const ApiRoutes = {
   leaveRoom: (roomId: string) => `/rooms/${roomId}/leave`,
   roomPreview: (roomId: string) => `/rooms/${roomId}/preview`,
   addAi: (roomId: string) => `/rooms/${roomId}/add-ai`,
+  updateRoomRules: (roomId: string) => `/rooms/${roomId}/rules`,
   startGame: (roomId: string) => `/rooms/${roomId}/start`,
   room: (roomId: string) => `/rooms/${roomId}`,
   gameView: (gameId: string) => `/games/${gameId}/view`,

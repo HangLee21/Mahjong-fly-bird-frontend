@@ -17,7 +17,7 @@ import {
   RuntimeLayout,
 } from '../ui/RuntimeUi';
 import { roomManager } from './RoomManager';
-import type { RoomSeat, RoomView } from './RoomTypes';
+import type { RoomRules, RoomSeat, RoomView } from './RoomTypes';
 
 const { ccclass } = _decorator;
 
@@ -417,16 +417,19 @@ export class RoomSceneController extends BaseScene {
 
   private applySettingsToRoom(): void {
     const room = this.ensureRoom();
-    roomManager.setRoom({
-      ...room,
-      rules: {
-        ...room.rules,
-        roundCount: this.settings.roundCount,
-        allowChow: this.settings.allowChow,
-        fanCap: this.settings.fanCap,
-        publicKongTiles: this.settings.publicKongTiles,
-        allowMultiWin: this.settings.allowMultiWin,
-      },
+    if (!this.isCurrentUserOwner()) return;
+    const rules: RoomRules = {
+      ...room.rules,
+      roundCount: this.settings.roundCount,
+      allowChow: this.settings.allowChow,
+      fanCap: this.settings.fanCap,
+      publicKongTiles: this.settings.publicKongTiles,
+      allowMultiWin: this.settings.allowMultiWin,
+    };
+    roomManager.setRoom({ ...room, rules });
+    void roomManager.updateRules(rules).catch((err) => {
+      console.warn('[RoomSceneController] update rules failed', err);
+      this.showNotice('设置保存失败');
     });
   }
 
@@ -440,6 +443,10 @@ export class RoomSceneController extends BaseScene {
   }
 
   private showSettingsDialog(visible: boolean): void {
+    if (visible && !this.isCurrentUserOwner()) {
+      this.showNotice('只有房主可以修改房间设置');
+      return;
+    }
     if (this.settingsLayer) this.settingsLayer.active = visible;
   }
 

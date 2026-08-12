@@ -20,6 +20,12 @@ interface WechatUserProfileResult {
   errMsg?: string;
 }
 
+interface WechatModalResult {
+  confirm?: boolean;
+  cancel?: boolean;
+  errMsg?: string;
+}
+
 interface WechatApi {
   login(options: {
     timeout?: number;
@@ -36,6 +42,10 @@ interface WechatApi {
     title: string;
     content: string;
     showCancel?: boolean;
+    confirmText?: string;
+    cancelText?: string;
+    success?: (result: WechatModalResult) => void;
+    fail?: (error: WechatModalResult) => void;
   }): void;
 }
 
@@ -114,4 +124,21 @@ export function showWechatBlockingError(title: string, error: unknown): void {
     return;
   }
   console.error(`[${title}] ${content}`);
+}
+
+/** 弹出确认框，返回用户是否点了确认。非微信环境直接视为确认。 */
+export function showWechatConfirm(title: string, content: string, confirmText = '确定', cancelText = '取消'): Promise<boolean> {
+  const wxApi = getWechatApi();
+  if (!wxApi?.showModal) return Promise.resolve(true);
+  return new Promise<boolean>((resolve) => {
+    wxApi.showModal!({
+      title,
+      content,
+      showCancel: true,
+      confirmText,
+      cancelText,
+      success: (result) => resolve(Boolean(result.confirm)),
+      fail: () => resolve(false),
+    });
+  });
 }
