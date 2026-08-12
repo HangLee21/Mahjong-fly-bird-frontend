@@ -1019,61 +1019,99 @@ export class GameController extends BaseScene {
       if (
         child.name.startsWith('FanItem')
         || child.name.startsWith('WinnerTitle')
-        || child.name.startsWith('WinnerTile')
+        || child.name.startsWith('WinnerFan')
+        || child.name.startsWith('WinnerHandTile')
+        || child.name.startsWith('WinnerMeldTile')
         || child.name === 'FanEmptyText'
       ) {
         child.active = false;
       }
     });
-    const columnX = dialogWidth * 0.27;
+    const columnX = dialogWidth * 0.07;
     const winners = result?.winnerDetails?.filter((item) => item.winner >= 0) ?? [];
     this.createText(
       layer,
       'FanTitle',
       winners.length > 0 ? '胡牌详情' : '番型明细',
-      new Vec3(columnX, dialogHeight * 0.33, 0),
-      layout.s(1.8),
+      new Vec3(columnX, dialogHeight * 0.365, 0),
+      layout.s(1.7),
       new Color(255, 238, 170, 255),
     );
     winners.slice(0, 2).forEach((winner, block) => {
-      const blockTop = dialogHeight * (0.33 - block * 0.17);
+      const blockTop = dialogHeight * (0.32 - block * 0.175);
       const sourceLabel = winner.source === 'ROB_KONG' ? '抢杠' : winner.source === 'SELF_DRAW' ? '自摸' : '点炮';
+      const tileText = winner.tile !== undefined ? ` · 进张 ${getTileLabel(winner.tile)}` : '';
       this.createText(
         layer,
         `WinnerTitle${block}`,
-        `${winner.winner + 1}号位 ${sourceLabel}胡牌`,
+        `${winner.winner + 1}号位 ${sourceLabel}胡牌${tileText}`,
         new Vec3(columnX, blockTop, 0),
         layout.s(1.55),
         new Color(255, 236, 158, 255),
       );
       ensureChild(layer, `WinnerTitle${block}`).active = true;
-      if (winner.tile !== undefined) {
-        this.createText(
-          layer,
-          `WinnerTile${block}`,
-          `进张 ${getTileLabel(winner.tile)}`,
-          new Vec3(columnX, blockTop - dialogHeight * 0.05, 0),
-          layout.s(1.45),
-          new Color(218, 244, 205, 255),
-        );
-        ensureChild(layer, `WinnerTile${block}`).active = true;
-      }
-      winner.fanItems.slice(0, 4).forEach((item, index) => {
-        const y = blockTop - dialogHeight * (0.098 + index * 0.048);
-        this.createText(
-          layer,
-          `FanItemText${block}_${index}`,
-          `${item.name}  ${item.points}分`,
-          new Vec3(columnX, y, 0),
-          layout.s(1.35),
-          new Color(225, 241, 211, 255),
-        );
-        ensureChild(layer, `FanItemText${block}_${index}`).active = true;
-      });
+      const fanText = winner.fanItems.slice(0, 4).map((item) => `${item.name} ${item.points}分`).join('  ');
+      this.createText(
+        layer,
+        `WinnerFan${block}`,
+        fanText || '暂无番型',
+        new Vec3(columnX, blockTop - dialogHeight * 0.05, 0),
+        layout.s(1.35),
+        new Color(225, 241, 211, 255),
+      );
+      ensureChild(layer, `WinnerFan${block}`).active = true;
+      this.renderWinnerTiles(layer, block, dialogWidth, dialogHeight, blockTop, winner.hand ?? [], winner.melds ?? []);
     });
     if (winners.length === 0) {
-      this.createText(layer, 'FanEmptyText', '暂无番型', new Vec3(columnX, dialogHeight * 0.24, 0), layout.s(1.45), new Color(190, 213, 183, 255));
+      this.createText(layer, 'FanEmptyText', '暂无番型', new Vec3(columnX, dialogHeight * 0.24, 0), layout.s(1.4), new Color(190, 213, 183, 255));
       ensureChild(layer, 'FanEmptyText').active = true;
+    }
+  }
+
+  private renderWinnerTiles(
+    layer: Node,
+    block: number,
+    dialogWidth: number,
+    dialogHeight: number,
+    blockTop: number,
+    hand: TileId[],
+    melds: Array<{ type: string; tiles: number[] }>,
+  ): void {
+    const columnX = dialogWidth * 0.07;
+    const columnWidth = dialogWidth * 0.43;
+    const tileW = Math.min(dialogHeight * 0.052, columnWidth / 8);
+    const tileH = tileW * 1.36;
+    const gap = tileW * 0.62;
+    const handTiles = hand.slice(0, 14);
+    const rowSize = 7;
+    const rows = Array.from({ length: Math.ceil(handTiles.length / rowSize) }, (_, row) =>
+      handTiles.slice(row * rowSize, row * rowSize + rowSize),
+    );
+    rows.forEach((row, rowIndex) => {
+      const span = Math.max(0, row.length - 1) * gap + tileW;
+      let x = columnX + Math.max(0, (columnWidth - span) / 2);
+      const y = blockTop - dialogHeight * (0.115 + rowIndex * 0.065);
+      row.forEach((tile, index) => {
+        const node = this.createTile(layer, `WinnerHandTile${block}_${rowIndex}_${index}`, tile, new Vec3(x, y, 0), tileW, tileH);
+        node.active = true;
+        x += gap;
+      });
+    });
+
+    const groups = melds.slice(0, 4).map((meld) => meld.tiles.slice(0, 4));
+    if (groups.length > 0) {
+      const total = groups.reduce((sum, group) => sum + group.length, 0);
+      const span = Math.max(0, total - 1) * gap + tileW + Math.max(0, groups.length - 1) * tileW * 0.45;
+      let mx = columnX + Math.max(0, (columnWidth - span) / 2);
+      const my = blockTop - dialogHeight * (0.115 + rows.length * 0.065) - tileH * 0.9;
+      groups.forEach((group, groupIndex) => {
+        group.forEach((tile) => {
+          const node = this.createTile(layer, `WinnerMeldTile${block}_${groupIndex}_${tile}`, tile, new Vec3(mx, my, 0), tileW * 0.92, tileH * 0.92);
+          node.active = true;
+          mx += gap;
+        });
+        mx += tileW * 0.45;
+      });
     }
   }
 
