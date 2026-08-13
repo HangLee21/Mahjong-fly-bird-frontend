@@ -491,12 +491,15 @@ export class GameController extends BaseScene {
       const isMeldHint = meldHint.has(tile);
       const isNewDraw = this.newDrawTile !== null && tile === this.newDrawTile;
       const tilePosition = new Vec3((index - (sorted.length - 1) / 2) * gap, isSelected ? tileH * 0.28 : 0, 0);
+      const node = this.createTile(handArea, `SelfTile${index}`, tile, tilePosition, tileW, tileH);
+      node.active = true;
       if (isNewDraw) {
         const glow = createImage(handArea, `SelfTileGlow${index}`, 'textures/ui/tile_selected_glow', tileW * 1.42, tileH * 1.2, tilePosition);
         glow.active = true;
+        // 光晕必须垫在对应牌面之下，否则新创建的节点会盖住牌面。
+        const tileIndex = handArea.children.indexOf(node);
+        (glow as Node & { setSiblingIndex?: (index: number) => void }).setSiblingIndex?.(Math.max(0, tileIndex - 1));
       }
-      const node = this.createTile(handArea, `SelfTile${index}`, tile, tilePosition, tileW, tileH);
-      node.active = true;
       const tileSprite = ensureComponent(ensureChild(node, 'TileImage'), Sprite);
       tileSprite.color = isSelected
         ? new Color(255, 235, 145, 255)
