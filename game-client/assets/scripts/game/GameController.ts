@@ -992,8 +992,8 @@ export class GameController extends BaseScene {
     layer.children.forEach((child) => {
       if (child.name.startsWith('ScoreRow')) child.active = false;
     });
-    const rowYRatios = [0.218, 0.064, -0.087, -0.239];
-    const avatarSize = dialogHeight * 0.1;
+    const rowYRatios = [0.2, 0.08, -0.04, -0.16];
+    const avatarSize = dialogHeight * 0.12;
     for (let index = 0; index < 4; index += 1) {
       const y = dialogHeight * rowYRatios[index];
       const delta = deltas[index] || 0;
@@ -1004,10 +1004,10 @@ export class GameController extends BaseScene {
         'textures/ui/default_avatar',
         avatarSize,
         avatarSize,
-        new Vec3(-dialogWidth * 0.321, y, 0),
+        new Vec3(-dialogWidth * 0.31, y, 0),
       );
-      this.createText(layer, `ScoreName${index}`, `${index}号  ${names[index] || '玩家'}`, new Vec3(-dialogWidth * 0.2, y, 0), layout.s(1.7));
-      this.createText(layer, `ScoreDelta${index}`, `${delta >= 0 ? '+' : ''}${delta}`, new Vec3(dialogWidth * 0.06, y, 0), layout.s(2.15), delta >= 0 ? new Color(255, 229, 137, 255) : new Color(170, 230, 255, 255));
+      this.createText(layer, `ScoreName${index}`, `${index}号  ${names[index] || '玩家'}`, new Vec3(-dialogWidth * 0.18, y, 0), layout.s(1.7));
+      this.createText(layer, `ScoreDelta${index}`, `${delta >= 0 ? '+' : ''}${delta}`, new Vec3(dialogWidth * 0.05, y, 0), layout.s(2.15), delta >= 0 ? new Color(255, 229, 137, 255) : new Color(170, 230, 255, 255));
     }
   }
 
@@ -1022,26 +1022,24 @@ export class GameController extends BaseScene {
       if (
         child.name.startsWith('FanItem')
         || child.name.startsWith('WinnerTitle')
-        || child.name.startsWith('WinnerFan')
-        || child.name.startsWith('WinnerHandTile')
-        || child.name.startsWith('WinnerMeldTile')
+        || child.name.startsWith('WinnerTile')
         || child.name === 'FanEmptyText'
       ) {
         child.active = false;
       }
     });
-    const columnX = dialogWidth * 0.07;
+    const columnX = dialogWidth * 0.11;
     const winners = result?.winnerDetails?.filter((item) => item.winner >= 0) ?? [];
     this.createText(
       layer,
       'FanTitle',
-      winners.length > 0 ? '胡牌详情' : '番型明细',
+      winners.length > 0 ? '番型' : '番型明细',
       new Vec3(columnX, dialogHeight * 0.365, 0),
       layout.s(1.7),
       new Color(255, 238, 170, 255),
     );
     winners.slice(0, 2).forEach((winner, block) => {
-      const blockTop = dialogHeight * (0.32 - block * 0.175);
+      const blockTop = dialogHeight * (block === 0 ? 0.31 : 0.12);
       const sourceLabel = winner.source === 'ROB_KONG' ? '抢杠' : winner.source === 'SELF_DRAW' ? '自摸' : '点炮';
       const tileText = winner.tile !== undefined ? ` · 进张 ${getTileLabel(winner.tile)}` : '';
       this.createText(
@@ -1049,73 +1047,73 @@ export class GameController extends BaseScene {
         `WinnerTitle${block}`,
         `${winner.winner + 1}号位 ${sourceLabel}胡牌${tileText}`,
         new Vec3(columnX, blockTop, 0),
-        layout.s(1.55),
+        layout.s(1.6),
         new Color(255, 236, 158, 255),
       );
       ensureChild(layer, `WinnerTitle${block}`).active = true;
-      const fanText = winner.fanItems.slice(0, 4).map((item) => `${item.name} ${item.points}分`).join('  ');
-      this.createText(
-        layer,
-        `WinnerFan${block}`,
-        fanText || '暂无番型',
-        new Vec3(columnX, blockTop - dialogHeight * 0.05, 0),
-        layout.s(1.35),
-        new Color(225, 241, 211, 255),
-      );
-      ensureChild(layer, `WinnerFan${block}`).active = true;
-      this.renderWinnerTiles(layer, block, dialogWidth, dialogHeight, blockTop, winner.hand ?? [], winner.melds ?? []);
+      const fans = winner.fanItems.slice(0, 3);
+      if (fans.length === 0) {
+        this.createText(layer, `FanItemText${block}_0`, '暂无番型', new Vec3(columnX, blockTop - dialogHeight * 0.055, 0), layout.s(1.35), new Color(190, 213, 183, 255));
+        ensureChild(layer, `FanItemText${block}_0`).active = true;
+      } else {
+        fans.forEach((item, index) => {
+          this.createText(
+            layer,
+            `FanItemText${block}_${index}`,
+            `${item.name}  ${item.points}分`,
+            new Vec3(columnX, blockTop - dialogHeight * (0.055 + index * 0.05), 0),
+            layout.s(1.35),
+            new Color(225, 241, 211, 255),
+          );
+          ensureChild(layer, `FanItemText${block}_${index}`).active = true;
+        });
+      }
     });
     if (winners.length === 0) {
       this.createText(layer, 'FanEmptyText', '暂无番型', new Vec3(columnX, dialogHeight * 0.24, 0), layout.s(1.4), new Color(190, 213, 183, 255));
       ensureChild(layer, 'FanEmptyText').active = true;
     }
+    this.renderWinnerTilesAtBottom(layer, winners, dialogWidth, dialogHeight);
   }
 
-  private renderWinnerTiles(
+  private renderWinnerTilesAtBottom(
     layer: Node,
-    block: number,
+    winners: Array<{ hand: number[]; melds?: Array<{ type: string; tiles: number[] }> }>,
     dialogWidth: number,
     dialogHeight: number,
-    blockTop: number,
-    hand: TileId[],
-    melds: Array<{ type: string; tiles: number[] }>,
   ): void {
-    const columnX = dialogWidth * 0.07;
-    const columnWidth = dialogWidth * 0.43;
-    const tileW = Math.min(dialogHeight * 0.052, columnWidth / 8);
-    const tileH = tileW * 1.36;
-    const gap = tileW * 0.62;
-    const handTiles = hand.slice(0, 14);
-    const rowSize = 7;
-    const rows = Array.from({ length: Math.ceil(handTiles.length / rowSize) }, (_, row) =>
-      handTiles.slice(row * rowSize, row * rowSize + rowSize),
-    );
-    rows.forEach((row, rowIndex) => {
-      const span = Math.max(0, row.length - 1) * gap + tileW;
-      let x = columnX + Math.max(0, (columnWidth - span) / 2);
-      const y = blockTop - dialogHeight * (0.115 + rowIndex * 0.065);
-      row.forEach((tile, index) => {
-        const node = this.createTile(layer, `WinnerHandTile${block}_${rowIndex}_${index}`, tile, new Vec3(x, y, 0), tileW, tileH);
-        node.active = true;
-        x += gap;
-      });
-    });
+    if (winners.length === 0) return;
+    const rowCount = winners.length > 1 ? 2 : 1;
+    const rows = winners.slice(0, rowCount);
+    const baseTileW = rowCount === 1 ? dialogHeight * 0.068 : dialogHeight * 0.052;
+    const rowYs = rowCount === 1 ? [dialogHeight * -0.26] : [dialogHeight * -0.22, dialogHeight * -0.3];
 
-    const groups = melds.slice(0, 4).map((meld) => meld.tiles.slice(0, 4));
-    if (groups.length > 0) {
-      const total = groups.reduce((sum, group) => sum + group.length, 0);
-      const span = Math.max(0, total - 1) * gap + tileW + Math.max(0, groups.length - 1) * tileW * 0.45;
-      let mx = columnX + Math.max(0, (columnWidth - span) / 2);
-      const my = blockTop - dialogHeight * (0.115 + rows.length * 0.065) - tileH * 0.9;
-      groups.forEach((group, groupIndex) => {
-        group.forEach((tile) => {
-          const node = this.createTile(layer, `WinnerMeldTile${block}_${groupIndex}_${tile}`, tile, new Vec3(mx, my, 0), tileW * 0.92, tileH * 0.92);
-          node.active = true;
-          mx += gap;
-        });
-        mx += tileW * 0.45;
+    rows.forEach((winner, row) => {
+      const hand = winner.hand.slice(0, 14);
+      const melds = (winner.melds ?? []).slice(0, 4).map((meld) => meld.tiles.slice(0, 4));
+      const meldTiles = melds.flat();
+      const total = hand.length + meldTiles.length;
+      const separation = meldTiles.length > 0 ? 1 : 0;
+      const tileW = Math.min(baseTileW, (dialogWidth * 0.9) / Math.max(total + separation, 8));
+      const tileH = tileW * 1.36;
+      const gap = tileW * 0.62;
+      const span = Math.max(0, total - 1) * gap + tileW + (meldTiles.length > 0 ? tileW * 0.5 : 0);
+      let cursor = -span / 2;
+      const y = rowYs[row];
+      hand.forEach((tile, index) => {
+        const node = this.createTile(layer, `WinnerTile${row}_${index}`, tile, new Vec3(cursor, y, 0), tileW, tileH);
+        node.active = true;
+        cursor += gap;
       });
-    }
+      if (meldTiles.length > 0) {
+        cursor += tileW * 0.5;
+        meldTiles.forEach((tile, index) => {
+          const node = this.createTile(layer, `WinnerTile${row}_${hand.length + index}`, tile, new Vec3(cursor, y, 0), tileW, tileH);
+          node.active = true;
+          cursor += gap;
+        });
+      }
+    });
   }
 
   private createTile(parent: Node, name: string, tile: TileId | null, position: Vec3, width: number, height: number, faceDown = false): Node {
