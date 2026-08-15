@@ -1,7 +1,7 @@
-import { _decorator, Color, Sprite, UITransform } from 'cc';
+import { _decorator } from 'cc';
 import { loadScene } from '../app/SceneNavigator';
 import { BaseScene } from '../core/BaseScene';
-import { createImage, createImageButton, createLayout, ensureCanvas, ensureComponent, setButtonImage } from '../ui/RuntimeUi';
+import { createImage, createImageButton, createIconButton, createLayout, ensureCanvas, setButtonImage } from '../ui/RuntimeUi';
 import { bgmManager } from '../audio/BgmManager';
 
 const { ccclass } = _decorator;
@@ -75,10 +75,7 @@ export class LobbyController extends BaseScene {
       buttonWidth / BUTTON_PRIMARY_RATIO,
     );
 
-    const musicButton = createImageButton(canvas, 'BgmToggleButton', '', this.bgmIcon(), () => this.toggleBgm(), layout.pos(39, 33));
-    ensureComponent(musicButton, UITransform).setContentSize(layout.s(5.5), layout.s(5.5));
-    const musicSprite = ensureComponent(musicButton, Sprite);
-    musicSprite.color = new Color(255, 255, 255, 0);
+    createIconButton(canvas, 'BgmToggleButton', this.bgmIcon(), () => this.toggleBgm(), layout.pos(39, 33), layout.s(5.5));
   }
 
   private toggleBgm(): void {
