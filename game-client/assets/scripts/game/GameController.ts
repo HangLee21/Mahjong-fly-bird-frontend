@@ -256,6 +256,8 @@ export class GameController extends BaseScene {
     exitLabel.color = new Color(255, 232, 151, 255);
     const musicButton = createImageButton(canvas, 'BgmToggleButton', '', this.bgmIcon(), () => this.toggleBgm(), layout.pos(43, 37));
     ensureComponent(musicButton, UITransform).setContentSize(layout.s(5.5), layout.s(5.5));
+    const musicSprite = ensureComponent(musicButton, Sprite);
+    musicSprite.color = new Color(255, 255, 255, 0);
   }
 
   private createCenterStatus(

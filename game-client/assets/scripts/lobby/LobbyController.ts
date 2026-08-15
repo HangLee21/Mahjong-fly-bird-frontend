@@ -1,4 +1,4 @@
-import { _decorator, UITransform } from 'cc';
+import { _decorator, Color, Sprite, UITransform } from 'cc';
 import { loadScene } from '../app/SceneNavigator';
 import { BaseScene } from '../core/BaseScene';
 import { createImage, createImageButton, createLayout, ensureCanvas, ensureComponent, setButtonImage } from '../ui/RuntimeUi';
@@ -77,6 +77,8 @@ export class LobbyController extends BaseScene {
 
     const musicButton = createImageButton(canvas, 'BgmToggleButton', '', this.bgmIcon(), () => this.toggleBgm(), layout.pos(39, 33));
     ensureComponent(musicButton, UITransform).setContentSize(layout.s(5.5), layout.s(5.5));
+    const musicSprite = ensureComponent(musicButton, Sprite);
+    musicSprite.color = new Color(255, 255, 255, 0);
   }
 
   private toggleBgm(): void {
