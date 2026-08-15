@@ -1048,6 +1048,7 @@ export class GameController extends BaseScene {
         || child.name.startsWith('WinnerTitle')
         || child.name.startsWith('WinnerType')
         || child.name.startsWith('WinnerTile')
+        || child.name.startsWith('WinnerMeldBg')
         || child.name === 'WinnerHandPanel'
         || child.name === 'WinnerHandLabel'
         || child.name === 'FanEmptyText'
@@ -1149,26 +1150,74 @@ export class GameController extends BaseScene {
 
     const tileW = dialogHeight * (rows.length === 1 ? 0.055 : 0.046);
     const tileH = tileW * 1.36;
-    const gap = tileW * 0.72;
-    const columns = rows.length === 1 ? 15 : 16;
-    const tilesCenterX = panelWidth * 0.07;
+    const tileGap = tileW * 0.68;
+    const handMeldGap = tileW * 1.15;
+    const meldGap = tileW * 0.8;
+    const rowStep = tileH * 0.72;
+    const leftX = -panelWidth * 0.3;
+    const rightX = panelWidth * 0.47;
 
     rows.forEach((winner, winnerIndex) => {
-      const tiles = [
-        ...winner.hand.slice(0, 14),
-        ...(winner.melds ?? []).slice(0, 4).flatMap((meld) => meld.tiles.slice(0, 4)),
-      ].slice(0, 28);
-      const rowCount = Math.ceil(tiles.length / columns);
       const winnerCenterY = panelY + (rows.length === 1 ? 0 : winnerIndex === 0 ? panelHeight * 0.23 : -panelHeight * 0.23);
-      tiles.forEach((tile, index) => {
-        const gridRow = Math.floor(index / columns);
-        const column = index % columns;
-        const countInRow = Math.min(columns, tiles.length - gridRow * columns);
-        const span = Math.max(0, countInRow - 1) * gap + tileW;
-        const x = tilesCenterX - span / 2 + tileW / 2 + column * gap;
-        const y = winnerCenterY + ((rowCount - 1) / 2 - gridRow) * tileH * 0.72;
-        const node = this.createTile(layer, `WinnerTile${winnerIndex}_${index}`, tile, new Vec3(x, y, 0), tileW, tileH);
+      const hand = winner.hand.slice(0, 14);
+      const melds = (winner.melds ?? []).slice(0, 4).map((meld) => meld.tiles.slice(0, 4)).filter((meld) => meld.length > 0);
+
+      const tilePositions: Array<{ tile: number; x: number; row: number }> = [];
+      const meldBackgrounds: Array<{ x: number; width: number; row: number; meldIndex: number }> = [];
+
+      let cursorX = leftX + tileW / 2;
+      let row = 0;
+      let meldIndex = 0;
+      let nodeIndex = 0;
+
+      const wrapIfNeeded = (widthNeeded: number): void => {
+        if (cursorX + widthNeeded - tileW / 2 > rightX) {
+          row += 1;
+          cursorX = leftX + tileW / 2;
+        }
+      };
+
+      hand.forEach((tile) => {
+        wrapIfNeeded(tileW);
+        tilePositions.push({ tile, x: cursorX, row });
+        cursorX += tileGap;
+      });
+
+      if (hand.length > 0 && melds.length > 0) cursorX += handMeldGap;
+
+      melds.forEach((meldTiles) => {
+        const meldSpan = (meldTiles.length - 1) * tileGap + tileW;
+        wrapIfNeeded(meldSpan + meldGap);
+        const meldLeft = cursorX - tileW / 2 - meldGap / 2;
+        const meldWidth = meldSpan + meldGap;
+        meldBackgrounds.push({ x: meldLeft + meldWidth / 2, width: meldWidth, row, meldIndex });
+        meldTiles.forEach((tile) => {
+          tilePositions.push({ tile, x: cursorX, row });
+          cursorX += tileGap;
+        });
+        cursorX += meldGap;
+        meldIndex += 1;
+      });
+
+      const totalRows = row + 1;
+      const rowY = (gridRow: number): number => winnerCenterY + ((totalRows - 1) / 2 - gridRow) * rowStep;
+
+      meldBackgrounds.forEach((background) => {
+        const node = createPanel(
+          layer,
+          `WinnerMeldBg${winnerIndex}_${background.meldIndex}`,
+          background.width,
+          tileH * 1.25,
+          new Color(255, 236, 168, 26),
+          new Vec3(background.x, rowY(background.row), 0),
+        );
         node.active = true;
+      });
+
+      tilePositions.forEach((position) => {
+        const node = this.createTile(layer, `WinnerTile${winnerIndex}_${nodeIndex}`, position.tile, new Vec3(position.x, rowY(position.row), 0), tileW, tileH);
+        node.active = true;
+        nodeIndex += 1;
       });
     });
   }
