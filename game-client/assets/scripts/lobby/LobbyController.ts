@@ -75,7 +75,7 @@ export class LobbyController extends BaseScene {
       buttonWidth / BUTTON_PRIMARY_RATIO,
     );
 
-    createIconButton(canvas, 'BgmToggleButton', this.bgmIcon(), () => this.toggleBgm(), layout.pos(39, 33), layout.s(7));
+    createIconButton(canvas, 'BgmToggleButton', this.bgmIcon(), () => this.toggleBgm(), layout.pos(39, 28), layout.s(9));
   }
 
   private toggleBgm(): void {

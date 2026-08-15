@@ -28,15 +28,14 @@ is retained for provenance.
 
 | Local file | Title | Author | License |
 | --- | --- | --- | --- |
-| `bgm/lobby_ambient.mp3` | A New Town (RPG Theme) | The Cynic Project / cynicmusic | CC0 1.0 |
-| `bgm/table_ambient.mp3` | Calm Ambient (Synthwave 4K) | The Cynic Project / cynicmusic | CC0 1.0 |
+| `bgm/lobby_ambient.mp3` | Slow Stride Loop | isaiah658 | CC0 1.0 |
+| `bgm/table_ambient.mp3` | Slow Stride Loop | isaiah658 | CC0 1.0 |
 
 Source:
 
-- https://opengameart.org/content/a-new-town-rpg-theme
-- https://opengameart.org/content/calm-ambient-1-synthwave-4k
+- https://opengameart.org/content/slow-stride
 
 `lobby_ambient.mp3` plays on non-game pages (login, lobby, room), and
-`table_ambient.mp3` plays during the mahjong game. Both are mono MP3
-transcodes of the CC0 originals for broader WeChat mini-game device
+`table_ambient.mp3` plays during the mahjong game. Both are stereo MP3
+transcodes of the CC0 original for broader WeChat mini-game device
 compatibility.

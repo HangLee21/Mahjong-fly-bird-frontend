@@ -255,7 +255,7 @@ export class GameController extends BaseScene {
     exitLabel.fontSize = layout.s(1.6) * TEXT_SCALE;
     exitLabel.lineHeight = layout.s(2.0) * TEXT_SCALE;
     exitLabel.color = new Color(255, 232, 151, 255);
-    createIconButton(canvas, 'BgmToggleButton', this.bgmIcon(), () => this.toggleBgm(), layout.pos(43, 37), layout.s(7));
+    createIconButton(canvas, 'BgmToggleButton', this.bgmIcon(), () => this.toggleBgm(), layout.pos(43, 33), layout.s(9));
   }
 
   private createCenterStatus(
