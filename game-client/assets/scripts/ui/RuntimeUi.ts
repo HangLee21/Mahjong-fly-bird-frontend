@@ -278,28 +278,14 @@ export function createIconButton(
   position = Vec3.ZERO,
   size = 64,
 ): Node {
-  const node = createButton(parent, name, '', onClick, position);
-  ensureComponent(node, UITransform).setContentSize(size, size);
-  ensureComponent(node, Sprite).color = new Color(255, 255, 255, 0);
-  const icon = ensureChild(node, 'Icon');
-  icon.layer = Layers.Enum.UI_2D;
-  icon.setPosition(0, 0, 0);
-  ensureComponent(icon, UITransform).setContentSize(size, size);
-  const iconSprite = ensureComponent(icon, Sprite);
-  iconSprite.sizeMode = Sprite.SizeMode.CUSTOM;
-  loadSpriteFrame(iconSprite, imagePath);
+  const node = createImage(parent, name, imagePath, size, size, position);
+  ensureComponent(node, Button);
+  bindTouchEnd(node, onClick);
   return node;
 }
 
 export function setButtonImage(node: Node, imagePath: string): void {
-  const icon = ensureChild(node, 'Icon');
-  icon.layer = Layers.Enum.UI_2D;
-  icon.setPosition(0, 0, 0);
-  ensureComponent(icon, UITransform).setContentSize(
-    ensureComponent(node, UITransform).width,
-    ensureComponent(node, UITransform).height,
-  );
-  const sprite = ensureComponent(icon, Sprite);
+  const sprite = ensureComponent(node, Sprite);
   sprite.sizeMode = Sprite.SizeMode.CUSTOM;
   loadSpriteFrame(sprite, imagePath);
 }
