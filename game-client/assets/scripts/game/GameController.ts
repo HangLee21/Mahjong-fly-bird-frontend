@@ -1046,6 +1046,7 @@ export class GameController extends BaseScene {
       if (
         child.name.startsWith('FanItem')
         || child.name.startsWith('WinnerTitle')
+        || child.name.startsWith('WinnerType')
         || child.name.startsWith('WinnerTile')
         || child.name === 'WinnerHandPanel'
         || child.name === 'WinnerHandLabel'
@@ -1072,28 +1073,38 @@ export class GameController extends BaseScene {
       this.createText(
         layer,
         `WinnerTitle${block}`,
-        `${winner.winner + 1}号位 · ${sourceLabel}`,
+        `${winner.winner + 1}号位 · ${sourceLabel} · ${winner.fan}番 ${winner.points}分`,
         new Vec3(columnX, blockTop, 0),
         layout.s(1.45),
         new Color(255, 236, 158, 255),
       );
       ensureChild(layer, `WinnerTitle${block}`).getComponent(UITransform)?.setContentSize(detailWidth, dialogHeight * 0.06);
       ensureChild(layer, `WinnerTitle${block}`).active = true;
+      this.createText(
+        layer,
+        `WinnerType${block}`,
+        winner.title || '底和',
+        new Vec3(columnX, blockTop - dialogHeight * 0.055, 0),
+        layout.s(1.2),
+        new Color(190, 225, 190, 255),
+      );
+      ensureChild(layer, `WinnerType${block}`).getComponent(UITransform)?.setContentSize(detailWidth, dialogHeight * 0.05);
+      ensureChild(layer, `WinnerType${block}`).active = true;
       if (winner.tile !== undefined) {
         this.createText(
           layer,
           `WinnerTileText${block}`,
           `进张 ${getTileLabel(winner.tile)}`,
-          new Vec3(columnX, blockTop - dialogHeight * 0.052, 0),
+          new Vec3(columnX, blockTop - dialogHeight * 0.105, 0),
           layout.s(1.3),
           new Color(231, 246, 214, 255),
         );
         ensureChild(layer, `WinnerTileText${block}`).getComponent(UITransform)?.setContentSize(detailWidth, dialogHeight * 0.052);
         ensureChild(layer, `WinnerTileText${block}`).active = true;
       }
-      const fans = winner.fanItems.slice(0, 3);
+      const fans = winner.fanItems;
       if (fans.length === 0) {
-        this.createText(layer, `FanItemText${block}_0`, '暂无番型', new Vec3(columnX, blockTop - dialogHeight * 0.11, 0), layout.s(1.25), new Color(190, 213, 183, 255));
+        this.createText(layer, `FanItemText${block}_0`, '暂无番型', new Vec3(columnX, blockTop - dialogHeight * 0.155, 0), layout.s(1.25), new Color(190, 213, 183, 255));
         ensureChild(layer, `FanItemText${block}_0`).getComponent(UITransform)?.setContentSize(detailWidth, dialogHeight * 0.05);
         ensureChild(layer, `FanItemText${block}_0`).active = true;
       } else {
@@ -1101,9 +1112,9 @@ export class GameController extends BaseScene {
           this.createText(
             layer,
             `FanItemText${block}_${index}`,
-            `${item.name}  ${item.points}分`,
-            new Vec3(columnX, blockTop - dialogHeight * (0.11 + index * 0.052), 0),
-            layout.s(1.3),
+            `${item.name}  +${item.fan ?? 0}番`,
+            new Vec3(columnX, blockTop - dialogHeight * (0.155 + index * 0.05), 0),
+            layout.s(1.22),
             new Color(225, 241, 211, 255),
           );
           ensureChild(layer, `FanItemText${block}_${index}`).getComponent(UITransform)?.setContentSize(detailWidth, dialogHeight * 0.05);
