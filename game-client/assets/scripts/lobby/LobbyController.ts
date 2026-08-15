@@ -1,7 +1,7 @@
-import { _decorator, Label, UITransform } from 'cc';
+import { _decorator, UITransform } from 'cc';
 import { loadScene } from '../app/SceneNavigator';
 import { BaseScene } from '../core/BaseScene';
-import { createButton, createImage, createImageButton, createLayout, ensureCanvas, ensureComponent } from '../ui/RuntimeUi';
+import { createImage, createImageButton, createLayout, ensureCanvas, ensureComponent, setButtonImage } from '../ui/RuntimeUi';
 import { bgmManager } from '../audio/BgmManager';
 
 const { ccclass } = _decorator;
@@ -75,20 +75,19 @@ export class LobbyController extends BaseScene {
       buttonWidth / BUTTON_PRIMARY_RATIO,
     );
 
-    const musicButton = createButton(canvas, 'BgmToggleButton', this.bgmLabel(), () => this.toggleBgm(), layout.pos(39, 33));
-    ensureComponent(musicButton, UITransform).setContentSize(layout.w(16), layout.h(8));
-  }
-
-  private bgmLabel(): string {
-    return bgmManager.isMuted() ? '音乐 关' : '音乐 开';
+    const musicButton = createImageButton(canvas, 'BgmToggleButton', '', this.bgmIcon(), () => this.toggleBgm(), layout.pos(39, 33));
+    ensureComponent(musicButton, UITransform).setContentSize(layout.s(5.5), layout.s(5.5));
   }
 
   private toggleBgm(): void {
     bgmManager.setMuted(!bgmManager.isMuted());
     const canvas = ensureCanvas(this.node);
     const node = canvas.children.find((child) => child.name === 'BgmToggleButton');
-    const label = node?.children.find((child) => child.name === 'Label')?.getComponent(Label);
-    if (label) label.string = this.bgmLabel();
+    if (node) setButtonImage(node, this.bgmIcon());
+  }
+
+  private bgmIcon(): string {
+    return bgmManager.isMuted() ? 'textures/ui/icon_music_off' : 'textures/ui/icon_music_on';
   }
 
   private createCoverImage(parent: ReturnType<typeof ensureCanvas>, name: string, path: string, width: number, height: number, ratio: number): void {

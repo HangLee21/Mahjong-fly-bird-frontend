@@ -25,6 +25,7 @@ import {
   ensureChild,
   ensureComponent,
   RuntimeLayout,
+  setButtonImage,
   TEXT_SCALE,
 } from '../ui/RuntimeUi';
 import { getTileTexturePath, TILE_BACK_TEXTURE } from '../assets/TileAssetMap';
@@ -253,10 +254,8 @@ export class GameController extends BaseScene {
     exitLabel.fontSize = layout.s(1.6) * TEXT_SCALE;
     exitLabel.lineHeight = layout.s(2.0) * TEXT_SCALE;
     exitLabel.color = new Color(255, 232, 151, 255);
-    const musicButton = createButton(canvas, 'BgmToggleButton', this.bgmLabel(), () => this.toggleBgm(), layout.pos(43, 37));
-    ensureComponent(musicButton, UITransform).setContentSize(layout.w(16), layout.h(8));
-    const musicLabel = musicButton.children.find((child) => child.name === 'Label')?.getComponent(Label);
-    if (musicLabel) musicLabel.color = new Color(255, 232, 151, 255);
+    const musicButton = createImageButton(canvas, 'BgmToggleButton', '', this.bgmIcon(), () => this.toggleBgm(), layout.pos(43, 37));
+    ensureComponent(musicButton, UITransform).setContentSize(layout.s(5.5), layout.s(5.5));
   }
 
   private createCenterStatus(
@@ -1189,16 +1188,15 @@ export class GameController extends BaseScene {
     if (!this.resultVisible) void gameManager.submitAction(action);
   };
 
-  private bgmLabel(): string {
-    return bgmManager.isMuted() ? '音乐 关' : '音乐 开';
-  }
-
   private toggleBgm(): void {
     bgmManager.setMuted(!bgmManager.isMuted());
     const canvas = ensureCanvas(this.node);
     const node = canvas.children.find((child) => child.name === 'BgmToggleButton');
-    const label = node?.children.find((child) => child.name === 'Label')?.getComponent(Label);
-    if (label) label.string = this.bgmLabel();
+    if (node) setButtonImage(node, this.bgmIcon());
+  }
+
+  private bgmIcon(): string {
+    return bgmManager.isMuted() ? 'textures/ui/icon_music_off' : 'textures/ui/icon_music_on';
   }
 
   private async exitGame(): Promise<void> {

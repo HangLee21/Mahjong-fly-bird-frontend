@@ -270,6 +270,11 @@ export function createImageButton(
   return node;
 }
 
+export function setButtonImage(node: Node, imagePath: string): void {
+  const sprite = ensureComponent(node, Sprite);
+  loadSpriteFrame(sprite, imagePath);
+}
+
 export function ensureView<T extends Component>(parent: Node, name: string, ctor: ComponentCtor<T>, position = Vec3.ZERO): T {
   const node = ensureChild(parent, name);
   node.layer = Layers.Enum.UI_2D;
