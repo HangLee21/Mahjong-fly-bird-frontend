@@ -11,7 +11,8 @@ import type { GameAction, GameEvent, PlayerGameView, TileId } from './GameTypes'
  * AI 每步动作（出牌/吃碰杠）在界面上展示前的延迟。
  * 调大可以放慢 AI 节奏，给报牌语音留出播放时间。
  */
-export const AI_ACTION_PRESENTATION_DELAY_MS = 1600;
+export const AI_ACTION_PRESENTATION_DELAY_MS = 320;
+export const OPENING_INTERACTION_LOCK_MS = 1350;
 
 interface PendingView {
   signature: string;
@@ -30,6 +31,11 @@ export class GameManager {
   private presentationTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly pendingViews: PendingView[] = [];
   private viewSignature = '';
+  private openingLocked = false;
+  private openingGameId: string | null = null;
+  private openingBaselinePublished = false;
+  private awaitingOpeningGameId = false;
+  private activeGameId: string | null = null;
 
   bindNetwork(): void {
     if (this.networkBound) return;
@@ -60,13 +66,61 @@ export class GameManager {
   }
 
   async enterGame(roomId: string, gameId: string, subscribeRoomIds: string[] = [roomId]): Promise<void> {
-    this.clearPresentationQueue();
-    this.viewSignature = '';
+    this.activeGameId = gameId;
+    this.awaitingOpeningGameId = false;
+    const preserveOpeningQueue = this.openingLocked
+      && (!this.openingGameId || this.openingGameId === gameId);
+    if (!preserveOpeningQueue) {
+      this.clearPresentationQueue();
+      this.viewSignature = '';
+    } else if (!this.openingGameId) {
+      this.openingGameId = gameId;
+    }
     this.startPolling();
     wsClient.connect();
     [...new Set(subscribeRoomIds.filter(Boolean))].forEach((id) => wsClient.subscribeRoom(id));
     const view = await httpClient.get<PlayerGameView>(ApiRoutes.gameView(gameId));
     this.setView(view);
+  }
+
+  beginOpeningSequence(gameId?: string): void {
+    if (this.openingLocked && (!gameId || !this.openingGameId || this.openingGameId === gameId)) {
+      if (gameId) {
+        this.openingGameId = gameId;
+        this.activeGameId = gameId;
+        this.awaitingOpeningGameId = false;
+      }
+      this.submitting = true;
+      return;
+    }
+    this.clearPresentationQueue();
+    this.openingLocked = true;
+    this.openingGameId = gameId ?? null;
+    this.activeGameId = gameId ?? null;
+    this.awaitingOpeningGameId = !gameId;
+    this.openingBaselinePublished = false;
+    this.submitting = true;
+  }
+
+  finishOpeningSequence(gameId: string): void {
+    if (!this.openingLocked || this.openingGameId !== gameId) return;
+    this.openingLocked = false;
+    this.openingGameId = null;
+    this.openingBaselinePublished = false;
+    this.awaitingOpeningGameId = false;
+    this.submitting = false;
+    eventBus.emit(GameEvents.GAME_VIEW_CHANGED, this.snapshot());
+    this.drainPendingViews();
+  }
+
+  cancelOpeningSequence(): void {
+    this.openingLocked = false;
+    this.openingGameId = null;
+    this.openingBaselinePublished = false;
+    this.awaitingOpeningGameId = false;
+    this.activeGameId = null;
+    this.submitting = false;
+    this.drainPendingViews();
   }
 
   /**
@@ -89,6 +143,23 @@ export class GameManager {
     this.pollTimer = null;
   }
 
+  leaveGame(): void {
+    this.stopPolling();
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = null;
+    this.clearPresentationQueue();
+    this.currentView = null;
+    this.events = [];
+    this.selectedTile = null;
+    this.submitting = false;
+    this.viewSignature = '';
+    this.openingLocked = false;
+    this.openingGameId = null;
+    this.openingBaselinePublished = false;
+    this.awaitingOpeningGameId = false;
+    this.activeGameId = null;
+  }
+
   private readonly handleWsStatus = (status: WsStatus): void => {
     if (status === 'CONNECTED') {
       this.refreshView().catch((error) => console.warn('[GameManager] refresh after reconnect failed', error));
@@ -97,14 +168,24 @@ export class GameManager {
 
   setView(view: PlayerGameView): void {
     const normalized = normalizeGameView(view);
+    if (this.awaitingOpeningGameId) return;
+    if (this.activeGameId && normalized.gameId !== this.activeGameId) return;
+    if (this.openingLocked && !this.openingGameId) this.openingGameId = normalized.gameId;
+    if (this.openingLocked && this.openingGameId && normalized.gameId !== this.openingGameId) return;
     const signature = JSON.stringify(normalized);
     const lastPending = this.pendingViews[this.pendingViews.length - 1];
     if (signature === lastPending?.signature || signature === this.viewSignature) {
-      if (!this.presentationTimer && this.pendingViews.length === 0) this.submitting = false;
+      if (!this.presentationTimer && this.pendingViews.length === 0) this.submitting = this.openingLocked;
       return;
     }
     const reference = lastPending?.view || this.currentView;
     if (isOlderView(reference, normalized)) return;
+
+    if (this.openingLocked && !this.openingBaselinePublished) {
+      this.openingBaselinePublished = true;
+      this.applyView(normalized, signature);
+      return;
+    }
 
     this.pendingViews.push({ view: normalized, signature });
     this.drainPendingViews();
@@ -112,7 +193,7 @@ export class GameManager {
 
   private applyView(view: PlayerGameView, signature: string): void {
     this.currentView = view;
-    this.submitting = false;
+    this.submitting = this.openingLocked;
     this.presentationAiSeat = null;
     if (signature === this.viewSignature) return;
     this.viewSignature = signature;
@@ -120,7 +201,7 @@ export class GameManager {
   }
 
   private drainPendingViews(): void {
-    if (this.presentationTimer) return;
+    if (this.presentationTimer || this.openingLocked) return;
 
     while (this.pendingViews.length > 0) {
       const next = this.pendingViews[0];
@@ -216,6 +297,7 @@ export class GameManager {
       events: this.events,
       selectedTile: this.selectedTile,
       submitting: this.submitting,
+      openingLocked: this.openingLocked,
       presentationAiSeat: this.presentationAiSeat,
       legalDiscardTiles: this.getLegalDiscardTiles(),
     };
@@ -291,6 +373,16 @@ export function getAiDiscardPresentationSeat(
   const previousCount = discardCountForSeat(previous, seatIndex);
   const nextCount = discardCountForSeat(next, seatIndex);
   return nextCount > previousCount ? seatIndex : null;
+}
+
+export function findNewDrawIndex(previousHand: TileId[], currentHand: TileId[]): number | null {
+  if (currentHand.length !== previousHand.length + 1) return null;
+  const previousCounts = new Map<TileId, number>();
+  previousHand.forEach((tile) => previousCounts.set(tile, (previousCounts.get(tile) ?? 0) + 1));
+  const currentCounts = new Map<TileId, number>();
+  currentHand.forEach((tile) => currentCounts.set(tile, (currentCounts.get(tile) ?? 0) + 1));
+  const addedTile = currentHand.find((tile) => (currentCounts.get(tile) ?? 0) > (previousCounts.get(tile) ?? 0));
+  return addedTile === undefined ? null : currentHand.lastIndexOf(addedTile);
 }
 
 export function getAiMeldPresentationSeat(

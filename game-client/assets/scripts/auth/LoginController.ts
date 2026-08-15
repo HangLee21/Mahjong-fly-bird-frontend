@@ -1,4 +1,4 @@
-import { _decorator, Color, Label, Node, Vec3 } from 'cc';
+import { _decorator, Color, Label, Node, UITransform, Vec3 } from 'cc';
 import { loadScene } from '../app/SceneNavigator';
 import { BaseScene } from '../core/BaseScene';
 import { authManager } from './AuthManager';
@@ -18,7 +18,9 @@ import {
   getWechatAppId,
   getWechatEnvironmentVersion,
   isWechatMiniGame,
+  createWechatProfileButton,
   showWechatBlockingError,
+  WechatUserInfoButton,
 } from '../platform/WechatPlatform';
 
 const { ccclass } = _decorator;
@@ -26,11 +28,13 @@ const { ccclass } = _decorator;
 const LOGIN_BG_RATIO = 1672 / 940;
 const LOGO_RATIO = 1536 / 1024;
 const PRIMARY_BUTTON_RATIO = 2048 / 686;
+const LOGIN_PANEL_RATIO = 2048 / 1080;
 
 @ccclass('LoginController')
 export class LoginController extends BaseScene {
   private loggingIn = false;
   private buttonFontSize = 28;
+  private profileButton: WechatUserInfoButton | null = null;
 
   async start(): Promise<void> {
     await this.enter();
@@ -47,6 +51,12 @@ export class LoginController extends BaseScene {
       return;
     }
     this.buildRuntimeUi();
+    this.installWechatProfileButton();
+  }
+
+  onDestroy(): void {
+    this.profileButton?.destroy();
+    this.profileButton = null;
   }
 
   private buildRuntimeUi(): void {
@@ -56,63 +66,51 @@ export class LoginController extends BaseScene {
     const layout = createLayout();
 
     this.createCoverImage(canvas, 'Background', 'textures/ui/lobby_bg', layout.width, layout.height, LOGIN_BG_RATIO);
-    createPanel(canvas, 'LoginShade', layout.width, layout.height, new Color(0, 0, 0, 110));
+    createPanel(canvas, 'LoginShade', layout.width, layout.height, new Color(0, 12, 8, 138));
 
     const logoWidth = layout.w(20);
-    createImage(canvas, 'LogoImage', 'textures/ui/lobby_logo', logoWidth, logoWidth / LOGO_RATIO, layout.pos(0, 21));
+    createImage(canvas, 'LogoImage', 'textures/ui/lobby_logo', logoWidth, logoWidth / LOGO_RATIO, layout.pos(0, 28));
 
-    this.createText(canvas, 'TitleText', '微信授权登录', layout.pos(0, 10), layout.s(2.9), new Color(255, 238, 170, 255));
+    const panelWidth = layout.w(42);
+    const panelHeight = panelWidth / LOGIN_PANEL_RATIO;
+    const panelPosition = layout.pos(0, -4);
+    createImage(canvas, 'GuidePanel', 'textures/ui/panel_main', panelWidth, panelHeight, panelPosition);
 
-    const panelWidth = layout.w(54);
-    const panelHeight = layout.h(24);
-    const panelPosition = layout.pos(0, -2);
-    createPanel(canvas, 'GuidePanel', panelWidth, panelHeight, new Color(10, 52, 42, 190), panelPosition);
-    const steps = [
-      '① 点击下方“微信一键登录”',
-      '② 在微信弹窗中选择“允许”',
-      '③ 授权后自动进入游戏',
-    ];
-    steps.forEach((step, index) => {
-      this.createText(
-        canvas,
-        `StepText${index}`,
-        step,
-        new Vec3(panelPosition.x, panelPosition.y + panelHeight * (0.26 - index * 0.26), 0),
-        layout.s(1.9),
-        new Color(235, 248, 217, 255),
-      );
-    });
+    this.createText(canvas, 'TitleText', '欢迎回来', new Vec3(0, panelPosition.y + panelHeight * 0.27, 0), layout.s(3.0), new Color(255, 238, 170, 255));
+    ensureChild(canvas, 'TitleText').getComponent(UITransform)?.setContentSize(panelWidth * 0.72, panelHeight * 0.2);
     this.createText(
       canvas,
       'PrivacyText',
-      '仅获取头像与昵称用于牌桌展示，不会收集其他信息',
-      new Vec3(panelPosition.x, panelPosition.y - panelHeight * 0.4, 0),
-      layout.s(1.45),
-      new Color(190, 220, 202, 255),
+      '授权头像和昵称，用于牌桌身份展示',
+      new Vec3(0, panelPosition.y + panelHeight * 0.02, 0),
+      layout.s(1.65),
+      new Color(214, 234, 216, 255),
     );
+    ensureChild(canvas, 'PrivacyText').getComponent(UITransform)?.setContentSize(panelWidth * 0.78, panelHeight * 0.16);
 
-    const buttonWidth = layout.w(30);
+    const buttonWidth = layout.w(24);
     const buttonNode = createImageButton(
       canvas,
       'LoginButton',
       '微信一键登录',
       'textures/ui/button_primary',
       () => void this.handleLogin(),
-      layout.pos(0, -17),
+      new Vec3(0, panelPosition.y - panelHeight * 0.24, 0),
       buttonWidth,
       buttonWidth / PRIMARY_BUTTON_RATIO,
     );
-    this.updateButtonLabel(buttonNode, '微信一键登录', layout.s(2.0));
-    this.buttonFontSize = layout.s(2.0);
+    this.updateButtonLabel(buttonNode, '微信登录', layout.s(1.9));
+    this.buttonFontSize = layout.s(1.9);
 
     this.createText(
       canvas,
       'FallbackHint',
-      isWechatMiniGame() ? '拒绝授权也能以默认头像继续游戏' : '请在微信开发者工具或微信真机中体验登录',
-      layout.pos(0, -21.3),
-      layout.s(1.45),
-      new Color(205, 226, 214, 255),
+      isWechatMiniGame() ? '拒绝授权时将使用默认头像' : '请使用微信开发者工具或真机登录',
+      layout.pos(0, -24),
+      layout.s(1.25),
+      new Color(178, 204, 189, 255),
     );
+    ensureChild(canvas, 'FallbackHint').getComponent(UITransform)?.setContentSize(layout.w(48), layout.h(5));
   }
 
   private async handleLogin(): Promise<void> {
@@ -127,8 +125,38 @@ export class LoginController extends BaseScene {
     } catch (error) {
       this.loggingIn = false;
       console.error('[LoginController] login failed', error);
-      if (button) this.updateButtonLabel(button, '微信一键登录', this.buttonFontSize);
+      if (button) this.updateButtonLabel(button, '微信登录', this.buttonFontSize);
       showWechatBlockingError('登录失败', error);
+    }
+  }
+
+  private installWechatProfileButton(): void {
+    if (!isWechatMiniGame()) return;
+    this.profileButton?.destroy();
+    this.profileButton = createWechatProfileButton(
+      { leftRatio: 0.38, topRatio: 0.565, widthRatio: 0.24, heightRatio: 0.14 },
+      (profile) => {
+        this.profileButton?.destroy();
+        this.profileButton = null;
+        void this.handleLoginWithProfile(profile);
+      },
+      (error) => showWechatBlockingError('授权失败', error),
+    );
+  }
+
+  private async handleLoginWithProfile(profile: { nickname: string; avatarUrl: string }): Promise<void> {
+    if (this.loggingIn) return;
+    this.loggingIn = true;
+    const button = ensureCanvas(this.node).children.find((child) => child.name === 'LoginButton');
+    if (button) this.updateButtonLabel(button, '登录中…', this.buttonFontSize);
+    try {
+      await authManager.login(profile);
+      loadScene('Lobby');
+    } catch (error) {
+      this.loggingIn = false;
+      if (button) this.updateButtonLabel(button, '微信登录', this.buttonFontSize);
+      showWechatBlockingError('登录失败', error);
+      this.installWechatProfileButton();
     }
   }
 
@@ -144,6 +172,7 @@ export class LoginController extends BaseScene {
     label.fontSize = fontSize * TEXT_SCALE;
     label.lineHeight = label.fontSize * 1.15;
     label.color = Color.WHITE;
+    labelNode.getComponent(UITransform)?.setContentSize(260, 54);
   }
 
   private createText(parent: Node, name: string, text: string, position: Vec3, fontSize: number, color = Color.WHITE): Label {

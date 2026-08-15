@@ -129,6 +129,11 @@ export class WsClient {
     this.roomIds.delete(roomId);
   }
 
+  resetRoomSubscriptions(): void {
+    this.roomIds.clear();
+    this.disconnect();
+  }
+
   private sendRoomSubscribe(roomId: string): void {
     this.send({ type: 'ROOM_SUBSCRIBE', roomId });
   }

@@ -20,6 +20,18 @@ interface WechatUserProfileResult {
   errMsg?: string;
 }
 
+export interface WechatUserInfoButton {
+  onTap(callback: (result: WechatUserProfileResult) => void): void;
+  destroy(): void;
+}
+
+export interface WechatUserInfoButtonStyle {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 interface WechatModalResult {
   confirm?: boolean;
   cancel?: boolean;
@@ -38,6 +50,12 @@ interface WechatApi {
     success?: (result: WechatUserProfileResult) => void;
     fail?: (error: WechatUserProfileResult) => void;
   }): void;
+  getSystemInfoSync?(): { windowWidth?: number; windowHeight?: number };
+  createUserInfoButton?(options: {
+    type: 'text';
+    text: string;
+    style: Record<string, string | number>;
+  }): WechatUserInfoButton;
   showModal?(options: {
     title: string;
     content: string;
@@ -47,6 +65,49 @@ interface WechatApi {
     success?: (result: WechatModalResult) => void;
     fail?: (error: WechatModalResult) => void;
   }): void;
+}
+
+export function createWechatProfileButton(
+  bounds: { leftRatio: number; topRatio: number; widthRatio: number; heightRatio: number },
+  onProfile: (profile: { nickname: string; avatarUrl: string }) => void,
+  onError: (error: Error) => void,
+): WechatUserInfoButton | null {
+  const wxApi = getWechatApi();
+  const systemInfo = wxApi?.getSystemInfoSync?.();
+  const width = systemInfo?.windowWidth;
+  const height = systemInfo?.windowHeight;
+  if (!wxApi?.createUserInfoButton || !width || !height) return null;
+
+  const button = wxApi.createUserInfoButton({
+    type: 'text',
+    text: '',
+    style: {
+      left: width * bounds.leftRatio,
+      top: height * bounds.topRatio,
+      width: width * bounds.widthRatio,
+      height: height * bounds.heightRatio,
+      backgroundColor: 'rgba(0,0,0,0)',
+      color: 'rgba(0,0,0,0)',
+      borderColor: 'rgba(0,0,0,0)',
+      borderWidth: 0,
+      borderRadius: 0,
+      fontSize: 1,
+      lineHeight: 1,
+      textAlign: 'center',
+    },
+  });
+  button.onTap((result) => {
+    const userInfo = result.userInfo;
+    if (!userInfo) {
+      onError(new Error(result.errMsg || '未获得微信头像和昵称授权'));
+      return;
+    }
+    onProfile({
+      nickname: userInfo.nickName || '微信玩家',
+      avatarUrl: userInfo.avatarUrl || '',
+    });
+  });
+  return button;
 }
 
 function getWechatApi(): WechatApi | null {

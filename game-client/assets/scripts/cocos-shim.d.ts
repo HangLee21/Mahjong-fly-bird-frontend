@@ -35,7 +35,17 @@ declare module 'cc' {
     color: Color;
     sizeMode: number;
   }
-  export class Label extends Component { string: string; color: Color; fontSize: number; lineHeight: number; }
+  export class Label extends Component {
+    static Overflow: { NONE: number; CLAMP: number; SHRINK: number; RESIZE_HEIGHT: number };
+    string: string;
+    color: Color;
+    fontSize: number;
+    lineHeight: number;
+    overflow: number;
+    horizontalAlign: number;
+    verticalAlign: number;
+    enableWrapText: boolean;
+  }
   export class Button {}
   export class Color { constructor(r?: number, g?: number, b?: number, a?: number); static WHITE: Color; static BLACK: Color; }
   export class Camera {

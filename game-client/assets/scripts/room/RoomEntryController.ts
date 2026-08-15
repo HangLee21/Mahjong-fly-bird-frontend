@@ -1,6 +1,7 @@
 import { _decorator, Color, Node, Rect, resources, Sprite, SpriteFrame, Texture2D, UITransform, Vec3 } from 'cc';
 import { loadScene } from '../app/SceneNavigator';
 import { BaseScene } from '../core/BaseScene';
+import { gameManager } from '../game/GameManager';
 import {
   createImage,
   createImageButton,
@@ -46,6 +47,7 @@ export class RoomEntryController extends BaseScene {
 
   async start(): Promise<void> {
     console.log('[RoomEntryController] start');
+    gameManager.leaveGame();
     await this.enter();
     this.buildRuntimeUi();
   }

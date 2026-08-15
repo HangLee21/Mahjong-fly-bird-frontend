@@ -52,12 +52,23 @@ TILE_SUITS: list[tuple[str, str]] = [
     ("wan", "万"),
 ]
 
+HONOR_TILES: list[tuple[str, str]] = [
+    ("dong", "\u4e1c"),
+    ("nan", "\u5357"),
+    ("xi", "\u897f"),
+    ("bei", "\u5317"),
+    ("zhong", "\u7ea2\u4e2d"),
+    ("fa", "\u53d1\u8d22"),
+    ("bai", "\u767d\u677f"),
+]
+
 
 def build_wordlist() -> list[tuple[str, str]]:
     words: list[tuple[str, str]] = list(ACTIONS)
     for num_key, num_text in TILE_NUMS:
         for suit_key, suit_text in TILE_SUITS:
             words.append((f"{num_key}_{suit_key}", f"{num_text}{suit_text}"))
+    words.extend(HONOR_TILES)
     return words
 
 

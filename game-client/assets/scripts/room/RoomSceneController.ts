@@ -4,6 +4,7 @@ import { loadScene } from '../app/SceneNavigator';
 import { authManager } from '../auth/AuthManager';
 import { BaseScene } from '../core/BaseScene';
 import { eventBus } from '../core/EventBus';
+import { gameManager } from '../game/GameManager';
 import {
   createButton,
   createImage,
@@ -89,9 +90,18 @@ export class RoomSceneController extends BaseScene {
     void this.addAi(emptySeat.seatIndex);
   }
 
-  private startGame(): void {
+  private async startGame(): Promise<void> {
     if (!this.isCurrentUserOwner()) return;
-    void roomManager.startGame();
+    if (gameManager.snapshot().openingLocked) gameManager.leaveGame();
+    gameManager.bindNetwork();
+    gameManager.beginOpeningSequence();
+    try {
+      await roomManager.startGame();
+    } catch (error) {
+      gameManager.cancelOpeningSequence();
+      console.error('[RoomSceneController] start game failed', error);
+      this.showNotice('开始游戏失败');
+    }
   }
 
   private toggleLocalReady(): void {
@@ -138,20 +148,22 @@ export class RoomSceneController extends BaseScene {
   }
 
   private createTopInfo(canvas: Node, layout: RuntimeLayout, room: RoomView): void {
-    const panelWidth = layout.w(34);
+    const panelWidth = layout.w(38);
     const panelHeight = panelWidth / PANEL_RATIO;
-    const panelPos = layout.pos(0, 32);
+    const panelPos = layout.pos(0, 34);
     createImage(canvas, 'RoomInfoPanel', 'textures/ui/room_panel', panelWidth, panelHeight, panelPos);
 
-    this.createText(canvas, 'RoomCodeText', `房间号 ${room.roomId}`, layout.pos(0, 35), layout.s(3.2), new Color(255, 238, 171, 255));
+    this.createText(canvas, 'RoomCodeText', `房间号 ${room.roomId}`, layout.pos(0, 36.5), layout.s(2.45), new Color(255, 238, 171, 255));
+    this.setChildContentSize(canvas, 'RoomCodeText', panelWidth * 0.78, panelHeight * 0.34);
     this.createText(
       canvas,
       'RuleText',
       `${this.settings.roundCount}轮   ${this.settings.fanCap}番封顶   小鸡万能   ${this.settings.allowMultiWin ? '一炮多响' : '一炮单响'}`,
-      layout.pos(0, 30.5),
-      layout.s(1.75),
+      layout.pos(0, 31.5),
+      layout.s(1.45),
       new Color(229, 248, 211, 255),
     );
+    this.setChildContentSize(canvas, 'RuleText', panelWidth * 0.86, panelHeight * 0.25);
 
     const settings = createImageButton(
       canvas,
@@ -159,7 +171,7 @@ export class RoomSceneController extends BaseScene {
       '',
       'textures/ui/button_setting',
       () => this.showSettingsDialog(true),
-      layout.pos(35, 32),
+      layout.pos(39, 34),
       layout.w(6),
       layout.h(6),
     );
@@ -183,10 +195,10 @@ export class RoomSceneController extends BaseScene {
 
   private createSeats(canvas: Node, layout: RuntimeLayout, room: RoomView, canManage: boolean): void {
     const seats = [0, 1, 2, 3].map((index) => room.seats.find((seat) => seat.seatIndex === index) || this.emptySeat(index));
-    this.createSeat(canvas, layout, seats[0], 'SeatBottom', layout.pos(0, -17), true, canManage);
-    this.createSeat(canvas, layout, seats[1], 'SeatRight', layout.pos(30, -2), false, canManage);
-    this.createSeat(canvas, layout, seats[2], 'SeatTop', layout.pos(0, 17), false, canManage);
-    this.createSeat(canvas, layout, seats[3], 'SeatLeft', layout.pos(-30, -2), false, canManage);
+    this.createSeat(canvas, layout, seats[0], 'SeatBottom', layout.pos(0, -19), true, canManage);
+    this.createSeat(canvas, layout, seats[1], 'SeatRight', layout.pos(31, 0), false, canManage);
+    this.createSeat(canvas, layout, seats[2], 'SeatTop', layout.pos(0, 19), false, canManage);
+    this.createSeat(canvas, layout, seats[3], 'SeatLeft', layout.pos(-31, 0), false, canManage);
   }
 
   private createSeat(parent: Node, layout: RuntimeLayout, seat: RoomSeat, name: string, position: Vec3, isSelfPosition: boolean, canManage: boolean): void {
@@ -198,7 +210,7 @@ export class RoomSceneController extends BaseScene {
     const isLocalUser = seat.user?.id === currentUserId;
     const canSeatBeManaged = canManage && Boolean(seat.user) && !isLocalUser;
     const canTransfer = canSeatBeManaged && !seat.isOwner;
-    const size = layout.s(isSelfPosition ? 18 : 16);
+    const size = layout.s(isSelfPosition ? 15.5 : 14);
     const imagePath = !seat.user ? 'textures/ui/seat_empty' : seat.isAI ? 'textures/ui/seat_ai' : 'textures/ui/seat_player';
 
     this.createImageByWidth(node, 'SeatFrame', imagePath, size, SEAT_RATIO);
@@ -230,17 +242,17 @@ export class RoomSceneController extends BaseScene {
 
     const nickname = seat.user?.nickname || (seat.user ? '游客' : '空位');
     const status = seat.user ? (seat.isOwner ? '房主' : seat.isReady ? '已准备' : '未准备') : '等待中';
-    this.createText(node, 'Nickname', nickname, new Vec3(0, -size * 0.31, 0), layout.s(isSelfPosition ? 2.05 : 1.75), Color.WHITE);
-    this.setChildContentSize(node, 'Nickname', size * 1.5, size * 0.24);
+    this.createText(node, 'Nickname', nickname, new Vec3(0, -size * 0.28, 0), layout.s(isSelfPosition ? 1.55 : 1.35), Color.WHITE);
+    this.setChildContentSize(node, 'Nickname', size * 1.25, size * 0.22);
     this.createText(
       node,
       'SeatStatus',
       status,
-      new Vec3(0, -size * 0.48, 0),
-      layout.s(isSelfPosition ? 1.75 : 1.5),
+      new Vec3(0, -size * 0.44, 0),
+      layout.s(isSelfPosition ? 1.3 : 1.15),
       seat.user ? new Color(255, 232, 153, 255) : new Color(178, 230, 202, 255),
     );
-    this.setChildContentSize(node, 'SeatStatus', size * 1.3, size * 0.22);
+    this.setChildContentSize(node, 'SeatStatus', size * 1.12, size * 0.19);
 
     if (!seat.user && canManage) {
       const addAiButton = createButton(node, 'SeatAddAiButton', '+AI', () => void this.addAi(seat.seatIndex), new Vec3(size * 0.36, size * 0.27, 0));
@@ -276,11 +288,11 @@ export class RoomSceneController extends BaseScene {
         '',
         'textures/ui/button_add_ai',
         () => this.addAiToFirstEmptySeat(),
-        layout.pos(-14, -25),
+        layout.pos(-14, -34),
         addAiWidth,
         addAiWidth / BUTTON_ADD_AI_RATIO,
       );
-      this.createClickHotspot(canvas, 'ButtonAddAiHotspot', () => this.addAiToFirstEmptySeat(), layout.pos(-14, -25), addAiWidth, addAiWidth / BUTTON_ADD_AI_RATIO);
+      this.createClickHotspot(canvas, 'ButtonAddAiHotspot', () => this.addAiToFirstEmptySeat(), layout.pos(-14, -34), addAiWidth, addAiWidth / BUTTON_ADD_AI_RATIO);
 
       const startWidth = layout.w(18);
       createImageButton(
@@ -289,7 +301,7 @@ export class RoomSceneController extends BaseScene {
         '',
         'textures/ui/button_start',
         () => this.startGame(),
-        layout.pos(14, -25),
+        layout.pos(14, -34),
         startWidth,
         startWidth / BUTTON_START_RATIO,
       );
@@ -303,7 +315,7 @@ export class RoomSceneController extends BaseScene {
       '',
       'textures/ui/badge_ready',
       () => this.toggleLocalReady(),
-      layout.pos(-14, -25),
+      layout.pos(-14, -34),
       readyWidth,
       readyWidth / BUTTON_START_RATIO,
     );
@@ -544,8 +556,9 @@ export class RoomSceneController extends BaseScene {
     button.getComponent(UITransform)?.setContentSize(width, height);
     const label = button.children.find((child) => child.name === 'Label')?.getComponent(Label);
     if (label) {
-      label.fontSize = Math.min(height * 0.38, width * 0.22) * TEXT_SCALE;
+      label.fontSize = Math.min(height * 0.38, width * 0.22);
       label.lineHeight = label.fontSize * 1.15;
+      label.node.getComponent(UITransform)?.setContentSize(width * 0.86, height * 0.72);
     }
   }
 

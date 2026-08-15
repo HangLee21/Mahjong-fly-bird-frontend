@@ -12,7 +12,14 @@ test('maps tiles to voice keys for the 0-33 encoding', () => {
   expect(tileToVoiceKey(17)).toBe('jiu_tong');
   expect(tileToVoiceKey(18)).toBe('yi_tiao');
   expect(tileToVoiceKey(26)).toBe('jiu_tiao');
-  expect(tileToVoiceKey(27)).toBeNull();
+  expect(tileToVoiceKey(27)).toBe('dong');
+  expect(tileToVoiceKey(28)).toBe('nan');
+  expect(tileToVoiceKey(29)).toBe('xi');
+  expect(tileToVoiceKey(30)).toBe('bei');
+  expect(tileToVoiceKey(31)).toBe('zhong');
+  expect(tileToVoiceKey(32)).toBe('fa');
+  expect(tileToVoiceKey(33)).toBe('bai');
+  expect(tileToVoiceKey(34)).toBeNull();
   expect(tileToVoiceKey(-1)).toBeNull();
 });
 

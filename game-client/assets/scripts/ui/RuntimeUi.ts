@@ -101,7 +101,10 @@ export function ensureComponent<T>(node: Node, ctor: ComponentCtor<T>): T {
   return node.getComponent(ctor) || node.addComponent(ctor);
 }
 
-/** 全局文字放大系数：真机上文字偏小时整体调大。 */
+/**
+ * Runtime UI is authored against the 1334 x 750 design resolution. Phone text
+ * uses a 2x readability scale; fixed art slots must constrain their labels.
+ */
 export const TEXT_SCALE = 2;
 
 export function createLabel(parent: Node, name: string, text: string, position = Vec3.ZERO): Label {
@@ -111,6 +114,16 @@ export function createLabel(parent: Node, name: string, text: string, position =
   ensureComponent(node, UITransform).setContentSize(760, 48);
   const label = ensureComponent(node, Label);
   label.string = text;
+  const constrainedLabel = label as Label & {
+    overflow?: number;
+    horizontalAlign?: number;
+    verticalAlign?: number;
+    enableWrapText?: boolean;
+  };
+  constrainedLabel.overflow = 2; // Label.Overflow.SHRINK
+  constrainedLabel.horizontalAlign = 1;
+  constrainedLabel.verticalAlign = 1;
+  constrainedLabel.enableWrapText = false;
   (label as Label & { color?: Color; fontSize?: number; lineHeight?: number }).color = Color.WHITE;
   (label as Label & { color?: Color; fontSize?: number; lineHeight?: number }).fontSize = 28 * TEXT_SCALE;
   (label as Label & { color?: Color; fontSize?: number; lineHeight?: number }).lineHeight = 36 * TEXT_SCALE;
@@ -204,6 +217,8 @@ export function createButton(parent: Node, name: string, text: string, onClick: 
   ensureComponent(node, Button);
   bindTouchEnd(node, onClick);
   const label = createLabel(node, 'Label', text, new Vec3(0, 0, 0));
+  label.string = text;
+  ensureComponent(label.node, UITransform).setContentSize(196, 52);
   (label as Label & { fontSize?: number; lineHeight?: number }).fontSize = 24 * TEXT_SCALE;
   (label as Label & { fontSize?: number; lineHeight?: number }).lineHeight = 30 * TEXT_SCALE;
   const button = ensureComponent(node, Button) as Button & { clickEvents?: unknown[] };

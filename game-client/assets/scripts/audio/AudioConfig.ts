@@ -22,12 +22,12 @@ export const AudioConfig = {
     lobbyAmbient: {
       resourcePath: 'audio/bgm/lobby_ambient',
       loop: true,
-      volume: 0.25,
+      volume: 0.14,
     },
     tableAmbient: {
       resourcePath: 'audio/bgm/table_ambient',
       loop: true,
-      volume: 0.28,
+      volume: 0.16,
     },
   } satisfies Record<BgmTrack, BgmTrackConfig>,
 };

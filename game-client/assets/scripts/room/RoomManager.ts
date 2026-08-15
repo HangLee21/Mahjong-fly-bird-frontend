@@ -100,7 +100,8 @@ export class RoomManager {
 
   async leaveRoom(): Promise<RoomView | null> {
     if (!this.currentRoom) return null;
-    const roomIds = [this.currentRoom.roomId, this.currentRoom.internalRoomId]
+    const leavingRoom = this.currentRoom;
+    const roomIds = [leavingRoom.roomId, leavingRoom.internalRoomId]
       .filter((roomId): roomId is string => Boolean(roomId));
     if (AppConfig.USE_MOCK_HTTP) {
       const room = this.leaveLocalRoom();
@@ -109,10 +110,15 @@ export class RoomManager {
       return room;
     }
 
-    const room = this.unwrapRoom(await roomApi.leaveRoom(this.currentRoom.roomId));
-    this.currentRoom = null;
+    const room = this.unwrapRoom(await roomApi.leaveRoom(leavingRoom.roomId));
+    if (this.currentRoom?.roomId === leavingRoom.roomId) this.currentRoom = null;
     roomIds.forEach((roomId) => wsClient.unsubscribeRoom(roomId));
     return room;
+  }
+
+  clearLocalRoom(): void {
+    wsClient.resetRoomSubscriptions();
+    this.currentRoom = null;
   }
 
   leaveLocalRoom(): RoomView | null {

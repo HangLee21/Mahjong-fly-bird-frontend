@@ -11,7 +11,7 @@ export class AuthManager {
   token: string | null = Storage.getToken();
   user: User | null = Storage.getUser();
 
-  async login(): Promise<void> {
+  async login(providedProfile?: { nickname: string; avatarUrl: string }): Promise<void> {
     if (AppConfig.USE_MOCK_HTTP) {
       this.token = 'mock-token';
       this.user = { id: 'u_001', nickname: '游客' };
@@ -22,7 +22,7 @@ export class AuthManager {
     }
 
     if (isWechatMiniGame()) {
-      await this.loginWithFreshWechatCode();
+      await this.loginWithFreshWechatCode(providedProfile);
       return;
     }
 
@@ -50,18 +50,24 @@ export class AuthManager {
   async wechatLogin(code: string, nickname?: string, avatarUrl?: string): Promise<void> {
     const result = await authApi.wechatLogin({ code, nickname, avatarUrl });
     this.token = result.token;
-    this.user = result.user;
+    this.user = {
+      ...result.user,
+      nickname: nickname || result.user.nickname,
+      avatarUrl: avatarUrl || result.user.avatarUrl,
+    };
     Storage.setToken(result.token);
-    Storage.setUser(result.user);
+    Storage.setUser(this.user);
     eventBus.emit(GameEvents.AUTH_CHANGED, this.snapshot());
   }
 
-  private async loginWithFreshWechatCode(): Promise<void> {
-    let profile: { nickname: string; avatarUrl: string } | null = null;
-    try {
-      profile = await requestWechatUserProfile();
-    } catch (error) {
-      console.warn('[AuthManager] failed to read WeChat profile, using defaults', error);
+  private async loginWithFreshWechatCode(providedProfile?: { nickname: string; avatarUrl: string }): Promise<void> {
+    let profile: { nickname: string; avatarUrl: string } | null = providedProfile ?? null;
+    if (!profile) {
+      try {
+        profile = await requestWechatUserProfile();
+      } catch (error) {
+        console.warn('[AuthManager] failed to read WeChat profile, using defaults', error);
+      }
     }
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const code = await requestWechatLoginCode();

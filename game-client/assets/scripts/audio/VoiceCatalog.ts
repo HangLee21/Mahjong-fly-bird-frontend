@@ -37,7 +37,14 @@ export type VoiceKey =
   | 'liu_tiao'
   | 'qi_tiao'
   | 'ba_tiao'
-  | 'jiu_tiao';
+  | 'jiu_tiao'
+  | 'dong'
+  | 'nan'
+  | 'xi'
+  | 'bei'
+  | 'zhong'
+  | 'fa'
+  | 'bai';
 
 const ACTION_KEYS: VoiceKey[] = [
   'chi',
@@ -78,12 +85,16 @@ export const TILE_VOICE_KEYS: VoiceKey[] = TILE_SUITS.flatMap((suit) =>
   NUMERIC.map((num) => `${num}_${suit}` as VoiceKey),
 );
 
+const HONOR_VOICE_KEYS: VoiceKey[] = ['dong', 'nan', 'xi', 'bei', 'zhong', 'fa', 'bai'];
+
 export const VOICE_PATHS: Record<VoiceKey, string> = {
   ...Object.fromEntries(ACTION_KEYS.map((key) => [key, `audio/voice/${key}`])),
   ...Object.fromEntries(TILE_VOICE_KEYS.map((key) => [key, `audio/voice/${key}`])),
+  ...Object.fromEntries(HONOR_VOICE_KEYS.map((key) => [key, `audio/voice/${key}`])),
 } as Record<VoiceKey, string>;
 
 export function tileToVoiceKey(tile: TileId): VoiceKey | null {
+  if (tile >= 27 && tile <= 33) return HONOR_VOICE_KEYS[tile - 27];
   if (tile < 0 || tile >= 27) return null;
   const suitIndex = Math.floor(tile / 9);
   const numberIndex = tile % 9;

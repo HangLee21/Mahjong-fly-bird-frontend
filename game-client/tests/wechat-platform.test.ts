@@ -1,4 +1,5 @@
 import {
+  createWechatProfileButton,
   getWechatAppId,
   getWechatEnvironmentVersion,
   isWechatMiniGame,
@@ -15,6 +16,11 @@ type TestWechatApi = {
       appId?: string;
       envVersion?: 'develop' | 'trial' | 'release';
     };
+  };
+  getSystemInfoSync?(): { windowWidth: number; windowHeight: number };
+  createUserInfoButton?(options: { style: Record<string, string | number> }): {
+    onTap(callback: (result: { userInfo?: { nickName?: string; avatarUrl?: string } }) => void): void;
+    destroy(): void;
   };
 };
 
@@ -55,5 +61,33 @@ describe('WechatPlatform', () => {
     });
 
     await expect(requestWechatLoginCode()).rejects.toThrow('login denied');
+  });
+
+  it('maps a native profile button tap to nickname and avatar', () => {
+    let tap: ((result: { userInfo?: { nickName?: string; avatarUrl?: string } }) => void) | undefined;
+    let style: Record<string, string | number> | undefined;
+    setWechatApi({
+      login: () => undefined,
+      getSystemInfoSync: () => ({ windowWidth: 1000, windowHeight: 500 }),
+      createUserInfoButton: (options) => {
+        style = options.style;
+        return {
+          onTap: (callback) => { tap = callback; },
+          destroy: () => undefined,
+        };
+      },
+    });
+    const onProfile = jest.fn();
+
+    const button = createWechatProfileButton(
+      { leftRatio: 0.38, topRatio: 0.565, widthRatio: 0.24, heightRatio: 0.14 },
+      onProfile,
+      jest.fn(),
+    );
+    tap?.({ userInfo: { nickName: '牌友', avatarUrl: 'https://example.com/avatar.png' } });
+
+    expect(button).not.toBeNull();
+    expect(style).toMatchObject({ left: 380, top: 282.5, width: 240, height: 70 });
+    expect(onProfile).toHaveBeenCalledWith({ nickname: '牌友', avatarUrl: 'https://example.com/avatar.png' });
   });
 });
