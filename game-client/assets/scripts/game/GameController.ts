@@ -370,7 +370,7 @@ export class GameController extends BaseScene {
     area.setPosition(config.position);
     this.setNodeAngle(area, this.sideAngle(position));
     area.children.forEach((child) => {
-      if (child.name.startsWith('DiscardTile')) child.active = false;
+      if (child.name.startsWith('DiscardTile') || child.name.startsWith('DiscardTileGlow')) child.active = false;
     });
     const discardBackground = createImage(area, 'DiscardAreaBg', 'textures/ui/discard_area', config.width, config.height);
     discardBackground.active = discards.length > 0;
@@ -389,6 +389,11 @@ export class GameController extends BaseScene {
       }
       const tileNode = this.createTile(area, `DiscardTile${index}`, tile, tilePosition, config.tileW, config.tileH);
       tileNode.active = true;
+      if (index === lastHighlightIndex) {
+        const glow = area.children.find((child) => child.name === `DiscardTileGlow${index}`);
+        const tileIndex = area.children.indexOf(tileNode);
+        (glow as Node & { setSiblingIndex?: (siblingIndex: number) => void }).setSiblingIndex?.(Math.max(0, tileIndex - 1));
+      }
       if (presentNewestTile && index === visibleDiscards.length - 1) {
         this.animatePop(tileNode, 0.72, 0.2);
       }
