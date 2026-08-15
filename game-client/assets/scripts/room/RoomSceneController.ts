@@ -28,6 +28,8 @@ type RoundCount = 8 | 16 | 24 | 32;
 interface RoomLocalSettings {
   roundCount: RoundCount;
   allowChow: boolean;
+  allowPong: boolean;
+  xiaoJiWildEnabled: boolean;
   allowMultiWin: boolean;
   fanCap: 3 | 4;
   publicKongTiles: 2 | 4;
@@ -47,6 +49,8 @@ export class RoomSceneController extends BaseScene {
   private settings: RoomLocalSettings = {
     roundCount: 16,
     allowChow: true,
+    allowPong: true,
+    xiaoJiWildEnabled: true,
     allowMultiWin: true,
     fanCap: 3,
     publicKongTiles: 2,
@@ -158,7 +162,7 @@ export class RoomSceneController extends BaseScene {
     this.createText(
       canvas,
       'RuleText',
-      `${this.settings.roundCount}轮   ${this.settings.fanCap}番封顶   小鸡万能   ${this.settings.allowMultiWin ? '一炮多响' : '一炮单响'}`,
+      `${this.settings.roundCount}轮 ${this.settings.fanCap}番 ${this.settings.allowChow ? '吃' : '无吃'} ${this.settings.allowPong ? '碰' : '无碰'} ${this.settings.xiaoJiWildEnabled ? '鸡万能' : '鸡非万能'} ${this.settings.allowMultiWin ? '多响' : '单响'}`,
       layout.pos(0, 31.5),
       layout.s(1.45),
       new Color(229, 248, 211, 255),
@@ -337,7 +341,9 @@ export class RoomSceneController extends BaseScene {
     this.createText(layer, 'RoundTitle', '局数', layout.pos(-16, 7), layout.s(2.2));
     this.createRoundButtons(layer, layout);
     this.createToggleButton(layer, layout, '吃牌', 'allowChow', layout.pos(-10, -1));
-    this.createToggleButton(layer, layout, '一炮多响', 'allowMultiWin', layout.pos(12, -1));
+    this.createToggleButton(layer, layout, '碰牌', 'allowPong', layout.pos(8, -1));
+    this.createToggleButton(layer, layout, '小鸡万能', 'xiaoJiWildEnabled', layout.pos(-10, -6));
+    this.createToggleButton(layer, layout, '一炮多响', 'allowMultiWin', layout.pos(8, -6));
     this.createFanCapButtons(layer, layout);
     this.createPublicKongButtons(layer, layout);
 
@@ -347,7 +353,7 @@ export class RoomSceneController extends BaseScene {
       '',
       'textures/ui/button_start',
       () => this.showSettingsDialog(false),
-      layout.pos(0, -16),
+      layout.pos(0, -18),
       layout.w(12),
       layout.w(12) / BUTTON_START_RATIO,
     );
@@ -373,7 +379,7 @@ export class RoomSceneController extends BaseScene {
     });
   }
 
-  private createToggleButton(parent: Node, layout: RuntimeLayout, text: string, key: 'allowChow' | 'allowMultiWin', position: Vec3): void {
+  private createToggleButton(parent: Node, layout: RuntimeLayout, text: string, key: 'allowChow' | 'allowPong' | 'xiaoJiWildEnabled' | 'allowMultiWin', position: Vec3): void {
     const selected = this.settings[key];
     const button = createButton(
       parent,
@@ -391,7 +397,7 @@ export class RoomSceneController extends BaseScene {
   }
 
   private createFanCapButtons(parent: Node, layout: RuntimeLayout): void {
-    this.createText(parent, 'FanCapTitle', '封顶', layout.pos(-16, -8), layout.s(2.1));
+    this.createText(parent, 'FanCapTitle', '封顶', layout.pos(-16, -11), layout.s(2.1));
     ([3, 4] as const).forEach((fanCap, index) => {
       const button = createButton(
         parent,
@@ -402,7 +408,7 @@ export class RoomSceneController extends BaseScene {
           this.applySettingsToRoom();
           this.showSettingsDialog(true);
         },
-        layout.pos(-7 + index * 6, -8),
+        layout.pos(-7 + index * 6, -11),
       );
       this.sizeButton(button, layout.w(5), layout.h(5));
       this.tintButton(button, this.settings.fanCap === fanCap ? new Color(185, 129, 41, 255) : new Color(21, 91, 67, 255));
@@ -410,7 +416,7 @@ export class RoomSceneController extends BaseScene {
   }
 
   private createPublicKongButtons(parent: Node, layout: RuntimeLayout): void {
-    this.createText(parent, 'PublicKongTitle', '公开杠牌', layout.pos(8, -8), layout.s(2.1));
+    this.createText(parent, 'PublicKongTitle', '公开杠牌', layout.pos(8, -11), layout.s(2.1));
     ([2, 4] as const).forEach((count, index) => {
       const button = createButton(
         parent,
@@ -421,7 +427,7 @@ export class RoomSceneController extends BaseScene {
           this.applySettingsToRoom();
           this.showSettingsDialog(true);
         },
-        layout.pos(18 + index * 6, -8),
+        layout.pos(18 + index * 6, -11),
       );
       this.sizeButton(button, layout.w(5), layout.h(5));
       this.tintButton(button, this.settings.publicKongTiles === count ? new Color(185, 129, 41, 255) : new Color(21, 91, 67, 255));
@@ -435,6 +441,8 @@ export class RoomSceneController extends BaseScene {
       ...room.rules,
       roundCount: this.settings.roundCount,
       allowChow: this.settings.allowChow,
+      allowPong: this.settings.allowPong,
+      xiaoJiWildEnabled: this.settings.xiaoJiWildEnabled,
       fanCap: this.settings.fanCap,
       publicKongTiles: this.settings.publicKongTiles,
       allowMultiWin: this.settings.allowMultiWin,
@@ -468,6 +476,8 @@ export class RoomSceneController extends BaseScene {
     this.settings = {
       roundCount: room.rules.roundCount || this.settings.roundCount,
       allowChow: room.rules.allowChow,
+      allowPong: room.rules.allowPong,
+      xiaoJiWildEnabled: room.rules.xiaoJiWildEnabled,
       allowMultiWin: room.rules.allowMultiWin,
       fanCap: room.rules.fanCap === 4 ? 4 : 3,
       publicKongTiles: room.rules.publicKongTiles === 4 ? 4 : 2,
@@ -486,6 +496,8 @@ export class RoomSceneController extends BaseScene {
         preset: 'qujing-fei-xiaoji-v1.5',
         roundCount: this.settings.roundCount,
         allowChow: this.settings.allowChow,
+        allowPong: this.settings.allowPong,
+        xiaoJiWildEnabled: this.settings.xiaoJiWildEnabled,
         fanCap: this.settings.fanCap,
         publicKongTiles: this.settings.publicKongTiles,
         xiaoJiTile: '1-tiao',

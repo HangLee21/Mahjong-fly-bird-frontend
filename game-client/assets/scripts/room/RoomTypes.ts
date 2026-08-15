@@ -20,6 +20,8 @@ export interface RoomRules {
   preset: 'qujing-fei-xiaoji-v1.5';
   roundCount: 8 | 16 | 24 | 32;
   allowChow: boolean;
+  allowPong: boolean;
+  xiaoJiWildEnabled: boolean;
   fanCap: number;
   publicKongTiles: 2 | 4;
   xiaoJiTile: '1-tiao';

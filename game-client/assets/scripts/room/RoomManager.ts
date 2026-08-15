@@ -156,6 +156,8 @@ export class RoomManager {
       preset: AppConfig.RULE_PRESET as RoomRules['preset'],
       roundCount: 16,
       allowChow: true,
+      allowPong: true,
+      xiaoJiWildEnabled: true,
       fanCap: 3,
       publicKongTiles: 2,
       xiaoJiTile: '1-tiao',

@@ -11,6 +11,8 @@ export const mockRoom: RoomView = {
     preset: 'qujing-fei-xiaoji-v1.5',
     roundCount: 16,
     allowChow: true,
+    allowPong: true,
+    xiaoJiWildEnabled: true,
     fanCap: 3,
     publicKongTiles: 2,
     xiaoJiTile: '1-tiao',
