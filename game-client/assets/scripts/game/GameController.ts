@@ -1061,8 +1061,8 @@ export class GameController extends BaseScene {
         child.active = false;
       }
     });
-    const columnX = dialogWidth * 0.312;
-    const detailWidth = dialogWidth * 0.16;
+    const columnX = dialogWidth * 0.28;
+    const detailWidth = dialogWidth * 0.17;
     const winners = result?.winnerDetails?.filter((item) => item.winner >= 0) ?? [];
     this.createText(
       layer,

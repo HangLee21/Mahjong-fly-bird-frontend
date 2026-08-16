@@ -134,7 +134,7 @@ export class LoginController extends BaseScene {
     if (!isWechatMiniGame()) return;
     this.profileButton?.destroy();
     this.profileButton = createWechatProfileButton(
-      { leftRatio: 0.38, topRatio: 0.565, widthRatio: 0.24, heightRatio: 0.14 },
+      { leftRatio: 0.36, topRatio: 0.62, widthRatio: 0.28, heightRatio: 0.16 },
       (profile) => {
         this.profileButton?.destroy();
         this.profileButton = null;
