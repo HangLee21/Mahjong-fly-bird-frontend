@@ -78,6 +78,12 @@ export function createWechatProfileButton(
   const systemInfo = wxApi?.getSystemInfoSync?.();
   const windowWidth = systemInfo?.windowWidth;
   const windowHeight = systemInfo?.windowHeight;
+  console.log('[WechatProfile] createWechatProfileButton attempt', {
+    hasWx: Boolean(wxApi),
+    hasCreateUserInfoButton: Boolean(wxApi?.createUserInfoButton),
+    windowWidth,
+    windowHeight,
+  });
   if (!wxApi?.createUserInfoButton || !windowWidth || !windowHeight) return null;
 
   // A full-screen overlay is the most reliable way to guarantee the native

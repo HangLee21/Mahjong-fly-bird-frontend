@@ -42,6 +42,7 @@ export class LoginController extends BaseScene {
 
   async enter(): Promise<void> {
     await super.enter();
+    console.log('[LoginController] enter', { isWechatMiniGame: isWechatMiniGame() });
     try {
       assertExperienceConfig();
       this.assertWechatAppId();
@@ -132,6 +133,7 @@ export class LoginController extends BaseScene {
   }
 
   private installWechatProfileButton(): void {
+    console.log('[LoginController] installWechatProfileButton', { isWechatMiniGame: isWechatMiniGame() });
     if (!isWechatMiniGame()) return;
     this.profileButton?.destroy();
 
