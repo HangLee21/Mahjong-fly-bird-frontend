@@ -68,24 +68,38 @@ interface WechatApi {
 }
 
 export function createWechatProfileButton(
-  bounds: { leftRatio: number; topRatio: number; widthRatio: number; heightRatio: number },
+  bounds: { centerX: number; centerY: number; width: number; height: number },
   onProfile: (profile: { nickname: string; avatarUrl: string }) => void,
   onError: (error: Error) => void,
 ): WechatUserInfoButton | null {
   const wxApi = getWechatApi();
   const systemInfo = wxApi?.getSystemInfoSync?.();
-  const width = systemInfo?.windowWidth;
-  const height = systemInfo?.windowHeight;
-  if (!wxApi?.createUserInfoButton || !width || !height) return null;
+  const windowWidth = systemInfo?.windowWidth;
+  const windowHeight = systemInfo?.windowHeight;
+  if (!wxApi?.createUserInfoButton || !windowWidth || !windowHeight) return null;
+
+  // Convert the Cocos design-space button (1334 x 750, center origin, y-up)
+  // into WeChat screen pixels, accounting for SHOW_ALL letterboxing.
+  const designWidth = 1334;
+  const designHeight = 750;
+  const scale = Math.min(windowWidth / designWidth, windowHeight / designHeight);
+  const contentWidth = designWidth * scale;
+  const contentHeight = designHeight * scale;
+  const offsetX = (windowWidth - contentWidth) / 2;
+  const offsetY = (windowHeight - contentHeight) / 2;
+  const centerScreenX = offsetX + (designWidth / 2 + bounds.centerX) * scale;
+  const centerScreenY = offsetY + (designHeight / 2 - bounds.centerY) * scale;
+  const buttonWidth = bounds.width * scale;
+  const buttonHeight = bounds.height * scale;
 
   const button = wxApi.createUserInfoButton({
     type: 'text',
     text: '',
     style: {
-      left: width * bounds.leftRatio,
-      top: height * bounds.topRatio,
-      width: width * bounds.widthRatio,
-      height: height * bounds.heightRatio,
+      left: centerScreenX - buttonWidth / 2,
+      top: centerScreenY - buttonHeight / 2,
+      width: buttonWidth,
+      height: buttonHeight,
       backgroundColor: 'rgba(0,0,0,0)',
       color: 'rgba(0,0,0,0)',
       borderColor: 'rgba(0,0,0,0)',

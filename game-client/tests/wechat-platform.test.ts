@@ -68,7 +68,7 @@ describe('WechatPlatform', () => {
     let style: Record<string, string | number> | undefined;
     setWechatApi({
       login: () => undefined,
-      getSystemInfoSync: () => ({ windowWidth: 1000, windowHeight: 500 }),
+      getSystemInfoSync: () => ({ windowWidth: 1334, windowHeight: 750 }),
       createUserInfoButton: (options) => {
         style = options.style;
         return {
@@ -80,14 +80,14 @@ describe('WechatPlatform', () => {
     const onProfile = jest.fn();
 
     const button = createWechatProfileButton(
-      { leftRatio: 0.38, topRatio: 0.565, widthRatio: 0.24, heightRatio: 0.14 },
+      { centerX: 100, centerY: 50, width: 200, height: 100 },
       onProfile,
       jest.fn(),
     );
     tap?.({ userInfo: { nickName: '牌友', avatarUrl: 'https://example.com/avatar.png' } });
 
     expect(button).not.toBeNull();
-    expect(style).toMatchObject({ left: 380, top: 282.5, width: 240, height: 70 });
+    expect(style).toMatchObject({ left: 667, top: 275, width: 200, height: 100 });
     expect(onProfile).toHaveBeenCalledWith({ nickname: '牌友', avatarUrl: 'https://example.com/avatar.png' });
   });
 });
