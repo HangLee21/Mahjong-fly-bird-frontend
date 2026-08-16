@@ -1,5 +1,6 @@
 import { AppConfig } from '../app/AppConfig';
 import { GameEvents } from '../app/GameEvents';
+import { loadScene } from '../app/SceneNavigator';
 import { eventBus } from '../core/EventBus';
 import { MockWsClient } from '../mock/MockWsClient';
 import { Storage } from '../utils/Storage';
@@ -145,7 +146,17 @@ export class WsClient {
 
   private handleMessage(data: string | ArrayBuffer): void {
     try {
-      this.dispatch(JSON.parse(String(data)) as WsMessage);
+      const message = JSON.parse(String(data)) as WsMessage & { code?: string };
+      if (message.type === 'ERROR' && message.code === 'UNAUTHORIZED') {
+        console.warn('[WsClient] authentication was revoked; returning to login');
+        this.dispatch(message);
+        this.disconnect();
+        Storage.clearSession();
+        eventBus.emit(GameEvents.AUTH_CHANGED, { token: null, user: null });
+        loadScene('Login');
+        return;
+      }
+      this.dispatch(message);
     } catch (error) {
       console.warn('[WsClient] ignored malformed websocket message', error);
     }
