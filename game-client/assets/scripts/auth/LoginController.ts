@@ -135,21 +135,8 @@ export class LoginController extends BaseScene {
     if (!isWechatMiniGame()) return;
     this.profileButton?.destroy();
 
-    const layout = createLayout();
-    const panelWidth = layout.w(42);
-    const panelHeight = panelWidth / LOGIN_PANEL_RATIO;
-    const panelPosition = layout.pos(0, -4);
-    const buttonWidth = layout.w(24);
-    const buttonHeight = buttonWidth / PRIMARY_BUTTON_RATIO;
-    const centerY = panelPosition.y - panelHeight * 0.24;
-    console.log('[LoginController] computing native profile button', {
-      centerY,
-      buttonWidth,
-      buttonHeight,
-    });
-
     this.profileButton = createWechatProfileButton(
-      { centerX: 0, centerY, width: buttonWidth, height: buttonHeight },
+      null,
       (profile) => {
         this.profileButton?.destroy();
         this.profileButton = null;

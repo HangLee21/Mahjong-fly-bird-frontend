@@ -90,4 +90,24 @@ describe('WechatPlatform', () => {
     expect(style).toMatchObject({ left: 667, top: 275, width: 200, height: 100 });
     expect(onProfile).toHaveBeenCalledWith({ nickname: '牌友', avatarUrl: 'https://example.com/avatar.png' });
   });
+
+  it('uses a full-screen overlay when bounds are omitted', () => {
+    let style: Record<string, string | number> | undefined;
+    setWechatApi({
+      login: () => undefined,
+      getSystemInfoSync: () => ({ windowWidth: 1334, windowHeight: 750 }),
+      createUserInfoButton: (options) => {
+        style = options.style;
+        return {
+          onTap: () => undefined,
+          destroy: () => undefined,
+        };
+      },
+    });
+
+    const button = createWechatProfileButton(null, jest.fn(), jest.fn());
+
+    expect(button).not.toBeNull();
+    expect(style).toMatchObject({ left: 0, top: 0, width: 1334, height: 1334 });
+  });
 });

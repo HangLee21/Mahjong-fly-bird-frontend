@@ -70,7 +70,7 @@ interface WechatApi {
 }
 
 export function createWechatProfileButton(
-  bounds: { centerX: number; centerY: number; width: number; height: number },
+  bounds: { centerX: number; centerY: number; width: number; height: number } | null,
   onProfile: (profile: { nickname: string; avatarUrl: string }) => void,
   onError: (error: Error) => void,
 ): WechatUserInfoButton | null {
@@ -80,26 +80,39 @@ export function createWechatProfileButton(
   const windowHeight = systemInfo?.windowHeight;
   if (!wxApi?.createUserInfoButton || !windowWidth || !windowHeight) return null;
 
-  // Convert the Cocos design-space button (1334 x 750, center origin, y-up)
-  // into WeChat screen pixels, accounting for SHOW_ALL letterboxing.
-  const designWidth = 1334;
-  const designHeight = 750;
-  const scale = Math.min(windowWidth / designWidth, windowHeight / designHeight);
-  const contentWidth = designWidth * scale;
-  const contentHeight = designHeight * scale;
-  const offsetX = (windowWidth - contentWidth) / 2;
-  const offsetY = (windowHeight - contentHeight) / 2;
-  const centerScreenX = offsetX + (designWidth / 2 + bounds.centerX) * scale;
-  const centerScreenY = offsetY + (designHeight / 2 - bounds.centerY) * scale;
-  const buttonWidth = bounds.width * scale;
-  const buttonHeight = bounds.height * scale;
+  // A full-screen overlay is the most reliable way to guarantee the native
+  // button receives the first tap on the login page, regardless of device
+  // orientation timing or Cocos letterboxing. When bounds are supplied we keep
+  // the design-space conversion for tests and future use.
+  const coverSize = Math.max(windowWidth, windowHeight);
+  let left = 0;
+  let top = 0;
+  let buttonWidth = coverSize;
+  let buttonHeight = coverSize;
+  let scale = 1;
+
+  if (bounds) {
+    const designWidth = 1334;
+    const designHeight = 750;
+    scale = Math.min(windowWidth / designWidth, windowHeight / designHeight);
+    const contentWidth = designWidth * scale;
+    const contentHeight = designHeight * scale;
+    const offsetX = (windowWidth - contentWidth) / 2;
+    const offsetY = (windowHeight - contentHeight) / 2;
+    const centerScreenX = offsetX + (designWidth / 2 + bounds.centerX) * scale;
+    const centerScreenY = offsetY + (designHeight / 2 - bounds.centerY) * scale;
+    buttonWidth = bounds.width * scale;
+    buttonHeight = bounds.height * scale;
+    left = centerScreenX - buttonWidth / 2;
+    top = centerScreenY - buttonHeight / 2;
+  }
 
   const button = wxApi.createUserInfoButton({
     type: 'text',
     text: ' ',
     style: {
-      left: centerScreenX - buttonWidth / 2,
-      top: centerScreenY - buttonHeight / 2,
+      left,
+      top,
       width: buttonWidth,
       height: buttonHeight,
       backgroundColor: 'rgba(0,0,0,0)',
@@ -115,13 +128,14 @@ export function createWechatProfileButton(
     lang: 'zh_CN',
   });
   console.log('[WechatProfile] createUserInfoButton bounds', {
-    left: centerScreenX - buttonWidth / 2,
-    top: centerScreenY - buttonHeight / 2,
+    left,
+    top,
     width: buttonWidth,
     height: buttonHeight,
     scale,
     windowWidth,
     windowHeight,
+    fullScreen: bounds === null,
   });
   button.onTap((result) => {
     console.log('[WechatProfile] user info button onTap', {
