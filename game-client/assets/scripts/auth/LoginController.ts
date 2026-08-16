@@ -115,6 +115,7 @@ export class LoginController extends BaseScene {
 
   private async handleLogin(): Promise<void> {
     if (this.loggingIn) return;
+    console.warn('[LoginController] fallback login reached; native profile button may not have intercepted');
     this.loggingIn = true;
     const canvas = ensureCanvas(this.node);
     const button = canvas.children.find((child) => child.name === 'LoginButton');
@@ -141,6 +142,11 @@ export class LoginController extends BaseScene {
     const buttonWidth = layout.w(24);
     const buttonHeight = buttonWidth / PRIMARY_BUTTON_RATIO;
     const centerY = panelPosition.y - panelHeight * 0.24;
+    console.log('[LoginController] computing native profile button', {
+      centerY,
+      buttonWidth,
+      buttonHeight,
+    });
 
     this.profileButton = createWechatProfileButton(
       { centerX: 0, centerY, width: buttonWidth, height: buttonHeight },

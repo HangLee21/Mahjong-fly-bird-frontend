@@ -55,6 +55,8 @@ interface WechatApi {
     type: 'text';
     text: string;
     style: Record<string, string | number>;
+    withCredentials?: boolean;
+    lang?: string;
   }): WechatUserInfoButton;
   showModal?(options: {
     title: string;
@@ -94,23 +96,38 @@ export function createWechatProfileButton(
 
   const button = wxApi.createUserInfoButton({
     type: 'text',
-    text: '',
+    text: ' ',
     style: {
       left: centerScreenX - buttonWidth / 2,
       top: centerScreenY - buttonHeight / 2,
       width: buttonWidth,
       height: buttonHeight,
       backgroundColor: 'rgba(0,0,0,0)',
-      color: 'rgba(0,0,0,0)',
-      borderColor: 'rgba(0,0,0,0)',
+      color: '#ffffff',
+      borderColor: '#ffffff',
       borderWidth: 0,
       borderRadius: 0,
       fontSize: 1,
       lineHeight: 1,
       textAlign: 'center',
     },
+    withCredentials: false,
+    lang: 'zh_CN',
+  });
+  console.log('[WechatProfile] createUserInfoButton bounds', {
+    left: centerScreenX - buttonWidth / 2,
+    top: centerScreenY - buttonHeight / 2,
+    width: buttonWidth,
+    height: buttonHeight,
+    scale,
+    windowWidth,
+    windowHeight,
   });
   button.onTap((result) => {
+    console.log('[WechatProfile] user info button onTap', {
+      hasUserInfo: Boolean(result.userInfo),
+      errMsg: result.errMsg ?? '',
+    });
     const userInfo = result.userInfo;
     if (!userInfo) {
       onError(new Error(result.errMsg || '未获得微信头像和昵称授权'));
