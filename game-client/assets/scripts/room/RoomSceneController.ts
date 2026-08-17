@@ -41,12 +41,15 @@ const PANEL_RATIO = 640 / 260;
 const CENTER_STATUS_RATIO = 360 / 180;
 const SEAT_RATIO = 1;
 const BUTTON_START_RATIO = 420 / 120;
+const READY_BUTTON_RATIO = 2048 / 819;
 const BUTTON_ADD_AI_RATIO = 360 / 100;
 const BUTTON_DELETE_RATIO = 1;
 
 @ccclass('RoomSceneController')
 export class RoomSceneController extends BaseScene {
   private settingsLayer: Node | null = null;
+  private roomPollTimer: ReturnType<typeof setInterval> | null = null;
+  private roomPolling = false;
   private settings: RoomLocalSettings = {
     roundCount: 16,
     allowChow: true,
@@ -59,6 +62,7 @@ export class RoomSceneController extends BaseScene {
 
   private readonly handleRoomChanged = (room: RoomView): void => {
     if (room.status === 'PLAYING') {
+      this.stopRoomPolling();
       loadScene('Game');
       return;
     }
@@ -73,9 +77,11 @@ export class RoomSceneController extends BaseScene {
     this.syncSettingsFromRoom(roomManager.currentRoom);
     this.bindRoomEvents();
     this.buildRuntimeUi();
+    this.startRoomPolling();
   }
 
   onDestroy(): void {
+    this.stopRoomPolling();
     this.unbindRoomEvents();
   }
 
@@ -332,9 +338,9 @@ export class RoomSceneController extends BaseScene {
       '',
       'textures/ui/badge_ready',
       () => void this.toggleReady(),
-      layout.pos(-14, -34),
+      layout.pos(0, -34),
       readyWidth,
-      readyWidth / BUTTON_START_RATIO,
+      readyWidth / READY_BUTTON_RATIO,
     );
   }
 
@@ -563,6 +569,26 @@ export class RoomSceneController extends BaseScene {
     return this.ensureRoom().seats
       .filter((seat) => Boolean(seat.user) && !seat.isAI)
       .every((seat) => seat.isReady);
+  }
+
+  private startRoomPolling(): void {
+    this.stopRoomPolling();
+    this.roomPollTimer = setInterval(() => {
+      if (this.roomPolling) return;
+      this.roomPolling = true;
+      roomManager.refreshRoom()
+        .catch((error) => console.warn('[RoomSceneController] room poll failed', error))
+        .finally(() => {
+          this.roomPolling = false;
+        });
+    }, 2500);
+    (this.roomPollTimer as unknown as { unref?: () => void }).unref?.();
+  }
+
+  private stopRoomPolling(): void {
+    if (!this.roomPollTimer) return;
+    clearInterval(this.roomPollTimer);
+    this.roomPollTimer = null;
   }
 
   private currentUserId(): string {

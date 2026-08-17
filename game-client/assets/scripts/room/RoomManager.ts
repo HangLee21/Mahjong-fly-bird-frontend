@@ -41,6 +41,14 @@ export class RoomManager {
     return roomApi.previewRoom(roomId);
   }
 
+  async refreshRoom(): Promise<void> {
+    if (!this.currentRoom) return;
+    const roomId = this.currentRoom.roomId;
+    const room = this.unwrapRoom(await roomApi.getRoom(roomId));
+    if (this.currentRoom?.roomId !== roomId) return;
+    if (JSON.stringify(this.currentRoom) !== JSON.stringify(room)) this.setRoom(room);
+  }
+
   async addAi(seatIndex: number): Promise<RoomView> {
     if (!this.currentRoom) throw new Error('当前没有房间');
     const room = AppConfig.USE_MOCK_HTTP
