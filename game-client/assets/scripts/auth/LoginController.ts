@@ -100,9 +100,6 @@ export class LoginController extends BaseScene {
       buttonWidth,
       buttonWidth / PRIMARY_BUTTON_RATIO,
     );
-    this.updateButtonLabel(buttonNode, '微信登录', layout.s(1.9));
-    this.buttonFontSize = layout.s(1.9);
-
     this.createText(
       canvas,
       'FallbackHint',
@@ -118,9 +115,6 @@ export class LoginController extends BaseScene {
     if (this.loggingIn) return;
     console.warn('[LoginController] fallback login reached; native profile button may not have intercepted');
     this.loggingIn = true;
-    const canvas = ensureCanvas(this.node);
-    const button = canvas.children.find((child) => child.name === 'LoginButton');
-    if (button) this.updateButtonLabel(button, '登录中…', this.buttonFontSize);
     try {
       await authManager.login();
       this.profileButton?.destroy();
@@ -129,7 +123,6 @@ export class LoginController extends BaseScene {
     } catch (error) {
       this.loggingIn = false;
       console.error('[LoginController] login failed', error);
-      if (button) this.updateButtonLabel(button, '微信登录', this.buttonFontSize);
       showWechatBlockingError('登录失败', error);
     }
   }
@@ -153,8 +146,6 @@ export class LoginController extends BaseScene {
   private async handleLoginWithProfile(profile: { nickname: string; avatarUrl: string }): Promise<void> {
     if (this.loggingIn) return;
     this.loggingIn = true;
-    const button = ensureCanvas(this.node).children.find((child) => child.name === 'LoginButton');
-    if (button) this.updateButtonLabel(button, '登录中…', this.buttonFontSize);
     try {
       await authManager.login(profile);
       this.profileButton?.destroy();
@@ -163,7 +154,6 @@ export class LoginController extends BaseScene {
     } catch (error) {
       this.loggingIn = false;
       console.error('[LoginController] profile login failed', error);
-      if (button) this.updateButtonLabel(button, '微信登录', this.buttonFontSize);
       showWechatBlockingError('登录失败', error);
       this.installWechatProfileButton();
     }
