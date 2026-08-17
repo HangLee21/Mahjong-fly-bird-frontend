@@ -186,22 +186,71 @@ export function createRemoteImage(parent: Node, name: string, url: string, fallb
     loadRemote<T>(remoteUrl: string, callback: (err: Error | null, asset: T | null) => void): void;
   };
 
-  remoteLoader.loadRemote<unknown>(url, (err, imageAsset) => {
-    let frame: SpriteFrame | null = null;
-    if (err || !imageAsset) {
-      console.warn(`[RuntimeUi] failed to load remote image: ${url}`, err);
-    } else {
+  const finishRemoteImage = (frame: SpriteFrame | null, err?: Error): void => {
+    if (err) console.warn(`[RuntimeUi] failed to load remote image: ${url}`, err);
+    if (frame) remoteSpriteFrameCache.set(url, frame);
+    const callbacks = remoteSpriteFramePending.get(url) || [];
+    remoteSpriteFramePending.delete(url);
+    callbacks.forEach((callback) => callback(frame));
+  };
+
+  const wxDownload = (globalThis as {
+    wx?: {
+      downloadFile?: (options: {
+        url: string;
+        success: (result: { statusCode: number; tempFilePath?: string; filePath?: string }) => void;
+        fail: (error: { errMsg?: string }) => void;
+      }) => void;
+    };
+  }).wx?.downloadFile;
+
+  if (wxDownload) {
+    wxDownload({
+      url,
+      success: (result) => {
+        const localPath = result.tempFilePath || result.filePath;
+        if (result.statusCode !== 200 || !localPath) {
+          finishRemoteImage(null, new Error(`avatar download status ${result.statusCode}`));
+          return;
+        }
+        const ImageCtor = (globalThis as {
+          Image?: new () => {
+            src: string;
+            onload: (() => void) | null;
+            onerror: (() => void) | null;
+          };
+        }).Image;
+        if (!ImageCtor) {
+          finishRemoteImage(null, new Error('Image constructor unavailable'));
+          return;
+        }
+        const image = new ImageCtor();
+        image.onload = () => {
+          const texture = new Texture2D();
+          (texture as Texture2D & { image?: unknown }).image = image;
+          const frame = new SpriteFrame();
+          frame.texture = texture;
+          finishRemoteImage(frame);
+        };
+        image.onerror = () => finishRemoteImage(null, new Error('avatar image decode failed'));
+        image.src = localPath;
+      },
+      fail: (error) => finishRemoteImage(null, new Error(error.errMsg || 'wx.downloadFile failed')),
+    });
+  } else {
+    remoteLoader.loadRemote<unknown>(url, (err, imageAsset) => {
+      let frame: SpriteFrame | null = null;
+      if (err || !imageAsset) {
+        finishRemoteImage(null, err || new Error('remote image is empty'));
+        return;
+      }
       const texture = new Texture2D();
       (texture as Texture2D & { image?: unknown }).image = imageAsset;
       frame = new SpriteFrame();
       frame.texture = texture;
-      remoteSpriteFrameCache.set(url, frame);
-    }
-
-    const callbacks = remoteSpriteFramePending.get(url) || [];
-    remoteSpriteFramePending.delete(url);
-    callbacks.forEach((callback) => callback(frame));
-  });
+      finishRemoteImage(frame);
+    });
+  }
 
   return node;
 }
