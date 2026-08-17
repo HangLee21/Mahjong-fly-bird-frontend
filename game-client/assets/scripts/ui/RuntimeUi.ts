@@ -17,6 +17,7 @@ import {
   Vec3,
   view,
 } from 'cc';
+import { ExperienceEnvironment } from '../app/ExperienceEnvironment';
 
 type ComponentCtor<T> = new (...args: never[]) => T;
 const spriteFrameCache = new Map<string, SpriteFrame>();
@@ -29,6 +30,39 @@ const pressFeedbackHandlers = new WeakMap<Node, { start: () => void; end: () => 
 // The WeChat simulator can report an unset design size during its first frame.
 export const DEFAULT_DESIGN_RESOLUTION: RuntimeSize = { width: 1334, height: 750 };
 const RESOLUTION_POLICY_SHOW_ALL = 2;
+
+function relayClientLog(level: 'info' | 'warn' | 'error', msg: string): void {
+  try {
+    const origin = ExperienceEnvironment.SERVER_ORIGIN.replace(/\/+$/, '');
+    const wxApi = (globalThis as {
+      wx?: {
+        request?: (options: {
+          url: string;
+          method: 'POST';
+          header?: Record<string, string>;
+          data?: unknown;
+        }) => void;
+      };
+    }).wx;
+    const payload = { level, msg };
+    if (wxApi?.request) {
+      wxApi.request({
+        url: `${origin}/api/debug/client-log`,
+        method: 'POST',
+        header: { 'content-type': 'application/json' },
+        data: payload,
+      });
+    } else if (typeof fetch === 'function') {
+      fetch(`${origin}/api/debug/client-log`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => undefined);
+    }
+  } catch {
+    // Never let debug logging break rendering.
+  }
+}
 
 export function applyLandscapeResolution(): void {
   const runtimeView = view as unknown as {
@@ -157,6 +191,9 @@ export function createRemoteImage(parent: Node, name: string, url: string, fallb
   const node = createImage(parent, name, fallbackPath, width, height, position);
   const sprite = ensureComponent(node, Sprite);
   if (!url) return node;
+  if (url.includes('/game-assets/avatars/')) {
+    relayClientLog('info', `[RuntimeUi] loading avatar ${url}`);
+  }
   const requestKey = `remote:${url}`;
   spriteFrameRequests.set(sprite, requestKey);
 
@@ -187,7 +224,12 @@ export function createRemoteImage(parent: Node, name: string, url: string, fallb
   };
 
   const finishRemoteImage = (frame: SpriteFrame | null, err?: Error): void => {
-    if (err) console.warn(`[RuntimeUi] failed to load remote image: ${url}`, err);
+    if (err) {
+      console.warn(`[RuntimeUi] failed to load remote image: ${url}`, err);
+      if (url.includes('/game-assets/avatars/')) {
+        relayClientLog('warn', `[RuntimeUi] failed to load avatar ${url}: ${err.message}`);
+      }
+    }
     if (frame) remoteSpriteFrameCache.set(url, frame);
     const callbacks = remoteSpriteFramePending.get(url) || [];
     remoteSpriteFramePending.delete(url);
