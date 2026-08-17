@@ -43,6 +43,19 @@ export class WsClient {
     this.setStatus(this.status === 'IDLE' ? 'CONNECTING' : 'RECONNECTING');
     const url = `${AppConfig.WS_BASE_URL}?token=${encodeURIComponent(token)}`;
     const wxApi = (globalThis as unknown as { wx?: WxSocketApi }).wx;
+    console.log('[WsClient] connecting', url.replace(/\?token=.*$/, '?token=***'));
+    if (wxApi?.connectSocket) {
+      const socket = wxApi.connectSocket({ url });
+      this.wxSocket = socket;
+      socket.onOpen(() => {
+        if (this.wxSocket === socket) this.handleOpen();
+      });
+      socket.onMessage((event) => this.handleMessage(event.data));
+      socket.onError(() => this.handleClose('ERROR', socket));
+      socket.onClose(() => this.handleClose('DISCONNECTED', socket));
+      return;
+    }
+
     if (typeof WebSocket === 'function') {
       const socket = new WebSocket(url);
       this.socket = socket;
@@ -55,22 +68,11 @@ export class WsClient {
       return;
     }
 
-    if (!wxApi?.connectSocket) {
-      this.handleClose('ERROR');
-      return;
-    }
-
-    const socket = wxApi.connectSocket({ url });
-    this.wxSocket = socket;
-    socket.onOpen(() => {
-      if (this.wxSocket === socket) this.handleOpen();
-    });
-    socket.onMessage((event) => this.handleMessage(event.data));
-    socket.onError(() => this.handleClose('ERROR', socket));
-    socket.onClose(() => this.handleClose('DISCONNECTED', socket));
+    this.handleClose('ERROR');
   }
 
   private handleOpen(): void {
+    console.log('[WsClient] connected');
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.reconnectPolicy.reset();
