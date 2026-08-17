@@ -220,7 +220,7 @@ export class RoomSceneController extends BaseScene {
     const canManageOccupiedSeat = canManage && Boolean(seat.user) && !isLocalUser;
     const canRemoveAi = canManage && seat.isAI && !isLocalUser;
     const shouldShowDelete = AppConfig.USE_MOCK_HTTP ? canManageOccupiedSeat : canRemoveAi;
-    const canTransfer = AppConfig.USE_MOCK_HTTP && canManageOccupiedSeat && !seat.isOwner;
+    const canTransfer = canManageOccupiedSeat && !seat.isAI && !seat.isOwner;
     const size = layout.s(isSelfPosition ? 15.5 : 14);
     const imagePath = !seat.user ? 'textures/ui/seat_empty' : seat.isAI ? 'textures/ui/seat_ai' : 'textures/ui/seat_player';
 
@@ -290,7 +290,7 @@ export class RoomSceneController extends BaseScene {
     }
 
     if (canTransfer) {
-      const transfer = createButton(node, 'TransferOwnerButton', '转让', () => roomManager.transferOwner(seat.seatIndex), new Vec3(-size * 0.38, size * 0.34, 0));
+      const transfer = createButton(node, 'TransferOwnerButton', '转让', () => void this.transferOwner(seat.seatIndex), new Vec3(-size * 0.38, size * 0.34, 0));
       this.sizeButton(transfer, size * 0.45, size * 0.2);
       this.tintButton(transfer, new Color(175, 122, 35, 235));
     }
@@ -482,6 +482,15 @@ export class RoomSceneController extends BaseScene {
     } catch (err) {
       console.error('[RoomSceneController] remove AI failed', err);
       this.showNotice('移除人机失败');
+    }
+  }
+
+  private async transferOwner(seatIndex: number): Promise<void> {
+    try {
+      await roomManager.transferOwner(seatIndex);
+    } catch (err) {
+      console.error('[RoomSceneController] transfer owner failed', err);
+      this.showNotice('转让房主失败');
     }
   }
 

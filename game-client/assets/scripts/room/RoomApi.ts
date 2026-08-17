@@ -26,6 +26,14 @@ export class RoomApi {
     return httpClient.post(ApiRoutes.removeAi(roomId), { seatIndex });
   }
 
+  kickPlayer(roomId: string, seatIndex: number): Promise<RoomResponse> {
+    return httpClient.post(ApiRoutes.kick(roomId), { seatIndex });
+  }
+
+  transferOwner(roomId: string, seatIndex: number): Promise<RoomResponse> {
+    return httpClient.post(ApiRoutes.transferOwner(roomId), { seatIndex });
+  }
+
   setReady(roomId: string, ready: boolean): Promise<RoomResponse> {
     return httpClient.post(ApiRoutes.roomReady(roomId), { ready });
   }

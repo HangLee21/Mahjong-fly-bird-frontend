@@ -68,6 +68,24 @@ export class RoomManager {
     return room;
   }
 
+  async kickPlayer(seatIndex: number): Promise<RoomView> {
+    if (!this.currentRoom) throw new Error('当前没有房间');
+    const room = AppConfig.USE_MOCK_HTTP
+      ? this.removeSeat(seatIndex)
+      : this.unwrapRoom(await roomApi.kickPlayer(this.currentRoom.roomId, seatIndex));
+    this.setRoom(room);
+    return room;
+  }
+
+  async transferOwner(seatIndex: number): Promise<RoomView> {
+    if (!this.currentRoom) throw new Error('当前没有房间');
+    const room = AppConfig.USE_MOCK_HTTP
+      ? this.transferOwnerLocal(seatIndex)
+      : this.unwrapRoom(await roomApi.transferOwner(this.currentRoom.roomId, seatIndex));
+    this.setRoom(room);
+    return room;
+  }
+
   async updateRules(rules: RoomRules): Promise<RoomView> {
     if (!this.currentRoom) throw new Error('当前没有房间');
     const room = this.unwrapRoom(await roomApi.updateRules(this.currentRoom.roomId, rules));
@@ -111,7 +129,7 @@ export class RoomManager {
     };
   }
 
-  transferOwner(seatIndex: number): RoomView {
+  transferOwnerLocal(seatIndex: number): RoomView {
     if (!this.currentRoom) throw new Error('当前没有房间');
     const target = this.currentRoom.seats.find((seat) => seat.seatIndex === seatIndex && seat.user);
     if (!target?.user) return this.currentRoom;
