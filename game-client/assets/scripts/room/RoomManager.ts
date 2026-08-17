@@ -50,6 +50,24 @@ export class RoomManager {
     return room;
   }
 
+  async removeAi(seatIndex: number): Promise<RoomView> {
+    if (!this.currentRoom) throw new Error('当前没有房间');
+    const room = AppConfig.USE_MOCK_HTTP
+      ? this.removeSeat(seatIndex)
+      : this.unwrapRoom(await roomApi.removeAi(this.currentRoom.roomId, seatIndex));
+    this.setRoom(room);
+    return room;
+  }
+
+  async setReady(ready: boolean): Promise<RoomView> {
+    if (!this.currentRoom) throw new Error('当前没有房间');
+    const room = AppConfig.USE_MOCK_HTTP
+      ? this.setLocalReady(ready)
+      : this.unwrapRoom(await roomApi.setReady(this.currentRoom.roomId, ready));
+    this.setRoom(room);
+    return room;
+  }
+
   async updateRules(rules: RoomRules): Promise<RoomView> {
     if (!this.currentRoom) throw new Error('当前没有房间');
     const room = this.unwrapRoom(await roomApi.updateRules(this.currentRoom.roomId, rules));
@@ -80,6 +98,17 @@ export class RoomManager {
     };
     this.setRoom(this.normalizeOwner(room));
     return this.currentRoom;
+  }
+
+  setLocalReady(ready: boolean): RoomView {
+    if (!this.currentRoom) throw new Error('当前没有房间');
+    const userId = this.currentUser().id;
+    return {
+      ...this.currentRoom,
+      seats: this.currentRoom.seats.map((seat) =>
+        seat.user?.id === userId ? { ...seat, isReady: ready } : seat,
+      ),
+    };
   }
 
   transferOwner(seatIndex: number): RoomView {

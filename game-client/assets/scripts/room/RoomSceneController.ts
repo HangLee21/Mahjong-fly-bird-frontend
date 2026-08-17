@@ -97,6 +97,10 @@ export class RoomSceneController extends BaseScene {
 
   private async startGame(): Promise<void> {
     if (!this.isCurrentUserOwner()) return;
+    if (!this.allHumansReady()) {
+      this.showNotice('还有玩家未准备');
+      return;
+    }
     if (gameManager.snapshot().openingLocked) gameManager.leaveGame();
     gameManager.bindNetwork();
     gameManager.beginOpeningSequence();
@@ -109,15 +113,15 @@ export class RoomSceneController extends BaseScene {
     }
   }
 
-  private toggleLocalReady(): void {
-    const room = this.ensureRoom();
-    const userId = this.currentUserId();
-    roomManager.setRoom({
-      ...room,
-      seats: room.seats.map((seat) =>
-        seat.user?.id === userId ? { ...seat, isReady: !seat.isReady } : seat,
-      ),
-    });
+  private async toggleReady(): Promise<void> {
+    const seat = this.ensureRoom().seats.find((item) => item.user?.id === this.currentUserId());
+    const ready = !Boolean(seat?.isReady);
+    try {
+      await roomManager.setReady(ready);
+    } catch (err) {
+      console.error('[RoomSceneController] ready update failed', err);
+      this.showNotice('准备状态更新失败');
+    }
   }
 
   private leaveRoom(): void {
@@ -213,8 +217,10 @@ export class RoomSceneController extends BaseScene {
 
     const currentUserId = this.currentUserId();
     const isLocalUser = seat.user?.id === currentUserId;
-    const canSeatBeManaged = AppConfig.USE_MOCK_HTTP && canManage && Boolean(seat.user) && !isLocalUser;
-    const canTransfer = canSeatBeManaged && !seat.isOwner;
+    const canManageOccupiedSeat = canManage && Boolean(seat.user) && !isLocalUser;
+    const canRemoveAi = canManage && seat.isAI && !isLocalUser;
+    const shouldShowDelete = AppConfig.USE_MOCK_HTTP ? canManageOccupiedSeat : canRemoveAi;
+    const canTransfer = AppConfig.USE_MOCK_HTTP && canManageOccupiedSeat && !seat.isOwner;
     const size = layout.s(isSelfPosition ? 15.5 : 14);
     const imagePath = !seat.user ? 'textures/ui/seat_empty' : seat.isAI ? 'textures/ui/seat_ai' : 'textures/ui/seat_player';
 
@@ -266,7 +272,7 @@ export class RoomSceneController extends BaseScene {
       this.createClickHotspot(node, 'SeatAddAiHotspot', () => void this.addAi(seat.seatIndex), new Vec3(size * 0.36, size * 0.27, 0), size * 0.48, size * 0.32);
     }
 
-    if (canSeatBeManaged) {
+    if (shouldShowDelete) {
       this.createImageByWidth(
         node,
         'DeleteSeatButton',
@@ -274,7 +280,13 @@ export class RoomSceneController extends BaseScene {
         size * 0.28,
         BUTTON_DELETE_RATIO,
         new Vec3(size * 0.43, size * 0.38, 0),
-      ).on('touch-end', () => roomManager.removeSeat(seat.seatIndex));
+      ).on('touch-end', () => {
+        if (AppConfig.USE_MOCK_HTTP) {
+          roomManager.removeSeat(seat.seatIndex);
+        } else {
+          void this.removeAi(seat.seatIndex);
+        }
+      });
     }
 
     if (canTransfer) {
@@ -319,7 +331,7 @@ export class RoomSceneController extends BaseScene {
       'ButtonReady',
       '',
       'textures/ui/badge_ready',
-      () => this.toggleLocalReady(),
+      () => void this.toggleReady(),
       layout.pos(-14, -34),
       readyWidth,
       readyWidth / BUTTON_START_RATIO,
@@ -464,6 +476,15 @@ export class RoomSceneController extends BaseScene {
     }
   }
 
+  private async removeAi(seatIndex: number): Promise<void> {
+    try {
+      await roomManager.removeAi(seatIndex);
+    } catch (err) {
+      console.error('[RoomSceneController] remove AI failed', err);
+      this.showNotice('移除人机失败');
+    }
+  }
+
   private showSettingsDialog(visible: boolean): void {
     if (visible && !this.isCurrentUserOwner()) {
       this.showNotice('只有房主可以修改房间设置');
@@ -527,6 +548,12 @@ export class RoomSceneController extends BaseScene {
 
   private isCurrentUserOwner(): boolean {
     return this.isOwner(this.ensureRoom());
+  }
+
+  private allHumansReady(): boolean {
+    return this.ensureRoom().seats
+      .filter((seat) => Boolean(seat.user) && !seat.isAI)
+      .every((seat) => seat.isReady);
   }
 
   private currentUserId(): string {
