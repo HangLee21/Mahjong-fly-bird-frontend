@@ -275,6 +275,11 @@ export class RoomSceneController extends BaseScene {
       const addAiButton = createButton(node, 'SeatAddAiButton', '+AI', () => void this.addAi(seat.seatIndex), new Vec3(size * 0.36, size * 0.27, 0));
       this.sizeButton(addAiButton, size * 0.36, size * 0.22);
       this.tintButton(addAiButton, new Color(20, 112, 82, 235));
+      const addAiLabel = addAiButton.children.find((child) => child.name === 'Label')?.getComponent(Label);
+      if (addAiLabel) {
+        addAiLabel.fontSize = size * 0.13;
+        addAiLabel.lineHeight = size * 0.16;
+      }
       this.createClickHotspot(node, 'SeatAddAiHotspot', () => void this.addAi(seat.seatIndex), new Vec3(size * 0.36, size * 0.27, 0), size * 0.48, size * 0.32);
     }
 
@@ -304,27 +309,27 @@ export class RoomSceneController extends BaseScene {
 
   private createActionButtons(canvas: Node, layout: RuntimeLayout, isOwner: boolean): void {
     if (isOwner) {
-      const addAiWidth = layout.w(18);
+      const addAiWidth = layout.w(20);
       createImageButton(
         canvas,
         'ButtonAddAi',
         '',
         'textures/ui/button_add_ai',
         () => this.addAiToFirstEmptySeat(),
-        layout.pos(-14, -34),
+        layout.pos(-16, -34),
         addAiWidth,
         addAiWidth / BUTTON_ADD_AI_RATIO,
       );
-      this.createClickHotspot(canvas, 'ButtonAddAiHotspot', () => this.addAiToFirstEmptySeat(), layout.pos(-14, -34), addAiWidth, addAiWidth / BUTTON_ADD_AI_RATIO);
+      this.createClickHotspot(canvas, 'ButtonAddAiHotspot', () => this.addAiToFirstEmptySeat(), layout.pos(-16, -34), addAiWidth, addAiWidth / BUTTON_ADD_AI_RATIO);
 
-      const startWidth = layout.w(18);
+      const startWidth = layout.w(20);
       createImageButton(
         canvas,
         'ButtonStartGame',
         '',
         'textures/ui/button_start',
         () => this.startGame(),
-        layout.pos(14, -34),
+        layout.pos(16, -34),
         startWidth,
         startWidth / BUTTON_START_RATIO,
       );
@@ -581,7 +586,7 @@ export class RoomSceneController extends BaseScene {
         .finally(() => {
           this.roomPolling = false;
         });
-    }, 2500);
+    }, 1000);
     (this.roomPollTimer as unknown as { unref?: () => void }).unref?.();
   }
 

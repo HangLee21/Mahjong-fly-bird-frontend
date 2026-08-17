@@ -133,7 +133,7 @@ export class GameManager {
     this.pollTimer = setInterval(() => {
       if (this.submitting || this.pendingViews.length > 0 || !this.currentView) return;
       this.refreshView().catch((error) => console.warn('[GameManager] poll refresh failed', error));
-    }, 4000);
+    }, 1200);
     (this.pollTimer as unknown as { unref?: () => void }).unref?.();
   }
 
@@ -265,7 +265,7 @@ export class GameManager {
       if (result.view) this.setView(result.view);
       else this.submitting = false;
       if (!result.accepted) throw new Error('Action was not accepted by backend.');
-      this.scheduleRefresh(600);
+      this.scheduleRefresh(200);
     } catch (restError) {
       this.submitting = false;
       console.error('[GameManager] submit action failed', clientAction, restError);
