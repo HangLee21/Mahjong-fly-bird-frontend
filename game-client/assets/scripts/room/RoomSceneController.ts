@@ -78,6 +78,7 @@ export class RoomSceneController extends BaseScene {
     this.bindRoomEvents();
     this.buildRuntimeUi();
     this.startRoomPolling();
+    this.refreshRoomNow();
   }
 
   onDestroy(): void {
@@ -309,27 +310,27 @@ export class RoomSceneController extends BaseScene {
 
   private createActionButtons(canvas: Node, layout: RuntimeLayout, isOwner: boolean): void {
     if (isOwner) {
-      const addAiWidth = layout.w(20);
+      const addAiWidth = layout.w(22);
       createImageButton(
         canvas,
         'ButtonAddAi',
         '',
         'textures/ui/button_add_ai',
         () => this.addAiToFirstEmptySeat(),
-        layout.pos(-16, -34),
+        layout.pos(-18, -34),
         addAiWidth,
         addAiWidth / BUTTON_ADD_AI_RATIO,
       );
-      this.createClickHotspot(canvas, 'ButtonAddAiHotspot', () => this.addAiToFirstEmptySeat(), layout.pos(-16, -34), addAiWidth, addAiWidth / BUTTON_ADD_AI_RATIO);
+      this.createClickHotspot(canvas, 'ButtonAddAiHotspot', () => this.addAiToFirstEmptySeat(), layout.pos(-18, -34), addAiWidth, addAiWidth / BUTTON_ADD_AI_RATIO);
 
-      const startWidth = layout.w(20);
+      const startWidth = layout.w(22);
       createImageButton(
         canvas,
         'ButtonStartGame',
         '',
         'textures/ui/button_start',
         () => this.startGame(),
-        layout.pos(16, -34),
+        layout.pos(18, -34),
         startWidth,
         startWidth / BUTTON_START_RATIO,
       );
@@ -586,7 +587,7 @@ export class RoomSceneController extends BaseScene {
         .finally(() => {
           this.roomPolling = false;
         });
-    }, 1000);
+    }, 500);
     (this.roomPollTimer as unknown as { unref?: () => void }).unref?.();
   }
 
@@ -595,6 +596,15 @@ export class RoomSceneController extends BaseScene {
     clearInterval(this.roomPollTimer);
     this.roomPollTimer = null;
   }
+
+  private refreshRoomNow(): void {
+    roomManager.refreshRoom()
+      .catch((error) => console.warn('[RoomSceneController] immediate room refresh failed', error));
+  }
+
+  private readonly handleWsStatus = (status: unknown): void => {
+    if (status === 'CONNECTED') this.refreshRoomNow();
+  };
 
   private currentUserId(): string {
     return authManager.user?.id || 'u_001';
@@ -615,6 +625,10 @@ export class RoomSceneController extends BaseScene {
       on(type: string, callback: (room: RoomView) => void, target?: unknown): void;
     };
     bus.on(GameEvents.ROOM_CHANGED, this.handleRoomChanged, this);
+    const wsBus = eventBus as unknown as {
+      on(type: string, callback: (status: unknown) => void, target?: unknown): void;
+    };
+    wsBus.on(GameEvents.WS_STATUS_CHANGED, this.handleWsStatus, this);
   }
 
   private unbindRoomEvents(): void {
@@ -622,6 +636,10 @@ export class RoomSceneController extends BaseScene {
       off(type: string, callback: (room: RoomView) => void, target?: unknown): void;
     };
     bus.off(GameEvents.ROOM_CHANGED, this.handleRoomChanged, this);
+    const wsBus = eventBus as unknown as {
+      off(type: string, callback: (status: unknown) => void, target?: unknown): void;
+    };
+    wsBus.off(GameEvents.WS_STATUS_CHANGED, this.handleWsStatus, this);
   }
 
   private createText(parent: Node, name: string, text: string, position: Vec3, fontSize: number, color = Color.WHITE): Label {
