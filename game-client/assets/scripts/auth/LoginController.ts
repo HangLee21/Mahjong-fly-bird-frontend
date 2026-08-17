@@ -158,6 +158,7 @@ export class LoginController extends BaseScene {
       loadScene('Lobby');
     } catch (error) {
       this.loggingIn = false;
+      console.error('[LoginController] profile login failed', error);
       if (button) this.updateButtonLabel(button, '微信登录', this.buttonFontSize);
       showWechatBlockingError('登录失败', error);
       this.installWechatProfileButton();
