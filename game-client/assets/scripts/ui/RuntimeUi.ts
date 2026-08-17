@@ -246,7 +246,11 @@ export function createRemoteImage(parent: Node, name: string, url: string, fallb
     };
   }).wx?.downloadFile;
 
-  if (wxDownload) {
+  const loadWithWxDownload = (): void => {
+    if (!wxDownload) {
+      finishRemoteImage(null, new Error('wx.downloadFile unavailable'));
+      return;
+    }
     wxDownload({
       url,
       success: (result) => {
@@ -279,20 +283,19 @@ export function createRemoteImage(parent: Node, name: string, url: string, fallb
       },
       fail: (error) => finishRemoteImage(null, new Error(error.errMsg || 'wx.downloadFile failed')),
     });
-  } else {
-    remoteLoader.loadRemote<unknown>(url, (err, imageAsset) => {
-      let frame: SpriteFrame | null = null;
-      if (err || !imageAsset) {
-        finishRemoteImage(null, err || new Error('remote image is empty'));
-        return;
-      }
-      const texture = new Texture2D();
-      (texture as Texture2D & { image?: unknown }).image = imageAsset;
-      frame = new SpriteFrame();
-      frame.texture = texture;
-      finishRemoteImage(frame);
-    });
-  }
+  };
+
+  remoteLoader.loadRemote<unknown>(url, (err, imageAsset) => {
+    if (err || !imageAsset) {
+      loadWithWxDownload();
+      return;
+    }
+    const texture = new Texture2D();
+    (texture as Texture2D & { image?: unknown }).image = imageAsset;
+    const frame = new SpriteFrame();
+    frame.texture = texture;
+    finishRemoteImage(frame);
+  });
 
   return node;
 }
