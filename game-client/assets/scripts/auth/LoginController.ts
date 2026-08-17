@@ -123,6 +123,8 @@ export class LoginController extends BaseScene {
     if (button) this.updateButtonLabel(button, '登录中…', this.buttonFontSize);
     try {
       await authManager.login();
+      this.profileButton?.destroy();
+      this.profileButton = null;
       loadScene('Lobby');
     } catch (error) {
       this.loggingIn = false;
@@ -155,6 +157,8 @@ export class LoginController extends BaseScene {
     if (button) this.updateButtonLabel(button, '登录中…', this.buttonFontSize);
     try {
       await authManager.login(profile);
+      this.profileButton?.destroy();
+      this.profileButton = null;
       loadScene('Lobby');
     } catch (error) {
       this.loggingIn = false;

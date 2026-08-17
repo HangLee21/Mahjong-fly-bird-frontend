@@ -115,7 +115,7 @@ export function createWechatProfileButton(
 
   const button = wxApi.createUserInfoButton({
     type: 'text',
-    text: ' ',
+    text: '',
     style: {
       left,
       top,
