@@ -93,7 +93,7 @@ export class LoginController extends BaseScene {
     const buttonNode = createImageButton(
       canvas,
       'LoginButton',
-      '微信一键登录',
+      '',
       'textures/ui/button_primary',
       () => void this.handleLogin(),
       new Vec3(0, panelPosition.y - panelHeight * 0.24, 0),
