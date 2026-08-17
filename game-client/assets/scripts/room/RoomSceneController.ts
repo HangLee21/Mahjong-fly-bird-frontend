@@ -1,6 +1,7 @@
 import { _decorator, Color, Label, Node, Sprite, UITransform, Vec3 } from 'cc';
 import { GameEvents } from '../app/GameEvents';
 import { loadScene } from '../app/SceneNavigator';
+import { AppConfig } from '../app/AppConfig';
 import { authManager } from '../auth/AuthManager';
 import { BaseScene } from '../core/BaseScene';
 import { eventBus } from '../core/EventBus';
@@ -212,7 +213,7 @@ export class RoomSceneController extends BaseScene {
 
     const currentUserId = this.currentUserId();
     const isLocalUser = seat.user?.id === currentUserId;
-    const canSeatBeManaged = canManage && Boolean(seat.user) && !isLocalUser;
+    const canSeatBeManaged = AppConfig.USE_MOCK_HTTP && canManage && Boolean(seat.user) && !isLocalUser;
     const canTransfer = canSeatBeManaged && !seat.isOwner;
     const size = layout.s(isSelfPosition ? 15.5 : 14);
     const imagePath = !seat.user ? 'textures/ui/seat_empty' : seat.isAI ? 'textures/ui/seat_ai' : 'textures/ui/seat_player';

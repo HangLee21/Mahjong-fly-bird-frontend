@@ -1002,6 +1002,17 @@ export class GameController extends BaseScene {
 
     const endGameButton = layer.children.find((child) => child.name === 'EndGameButton');
     if (endGameButton) endGameButton.active = false;
+
+    const currentUserId = authManager.user?.id;
+    const roomOwnerId = roomManager.currentRoom?.ownerId;
+    const canContinue = Boolean(currentUserId && roomOwnerId && currentUserId === roomOwnerId);
+    if (!canContinue) {
+      const continueButton = layer.children.find((child) => child.name === 'ContinueButton');
+      if (continueButton) continueButton.active = false;
+      this.createText(layer, 'WaitingForOwnerText', '等待房主继续游戏', buttonPosition, layout.s(1.5), new Color(218, 244, 205, 255));
+      return;
+    }
+
     createImageButton(layer, 'ContinueButton', '', 'textures/ui/button_continue', () => this.continueGame(), buttonPosition, buttonWidth, buttonWidth / 3.02).active = true;
   }
 
